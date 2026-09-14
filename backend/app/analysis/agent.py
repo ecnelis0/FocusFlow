@@ -27,6 +27,7 @@ from ..query import BankQuery, Vocabulary
 from .base import AnalysisFailed, MistakeAnalysis, MistakeInput
 from .claude import INTERPRET_PROMPT, SUMMARISE_PROMPT, SYSTEM_PROMPT, _render, summarise_prompt
 from .extract import _TEXT_LABELS, EXTRACT_PROMPT, CaptureExtraction, CaptureInput, _existing_block
+from .scan import SCAN_PROMPT, ScanInput, ScannedQuestion
 
 # Where a PDF or image lands before the agent reads it. Extension matters: the CLI
 # decides how to read a file from its suffix.
@@ -220,3 +221,51 @@ class AgentExtractor:
             model=self._model,
             schema=CaptureExtraction,
         )
+
+
+class AgentScanner:
+    """Reads one question out of a picture or a PDF page.
+
+    Same temporary-directory-and-`Read` route as the extractor: the CLI's Read tool
+    handles images and PDFs natively, and nothing is sent inline.
+    """
+
+    name = "agent"
+
+    def __init__(self, model: str, mkdtemp: Callable[[], str] = tempfile.mkdtemp) -> None:
+        self._model = model
+        self._mkdtemp = mkdtemp
+
+    async def read(self, scan: ScanInput) -> ScannedQuestion:
+        suffix = _SUFFIX.get(scan.media_type)
+        if suffix is None:
+            raise AnalysisFailed(f"cannot hand a {scan.media_type} to the agent")
+
+        data = scan.data
+        if scan.kind == "image":
+            data, suffix = _shrink(data, suffix)
+
+        directory = self._mkdtemp()
+        path = Path(directory) / f"question{suffix}"
+        path.write_bytes(data)
+
+        hint = (
+            f"\n\nThe student says this is: {scan.subject_hint}" if scan.subject_hint else ""
+        )
+        try:
+            return await _run(
+                prompt=(
+                    f"The question is in the file at {path}. Read it with the Read tool, "
+                    "then return the question, its answer choices, and the correct answer "
+                    "if the page states one." + hint
+                ),
+                system=SCAN_PROMPT,
+                model=self._model,
+                schema=ScannedQuestion,
+                cwd=directory,
+                allowed_tools=["Read"],
+                max_turns=12,
+            )
+        finally:
+            path.unlink(missing_ok=True)
+            Path(directory).rmdir()

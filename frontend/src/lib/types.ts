@@ -216,3 +216,15 @@ export interface MistakeDraft {
   source?: string | null;
   student_note?: string | null;
 }
+
+/** What the AI read out of a picture of a question. Everything but the question
+ *  itself can be null: a half-filled form beats a blank one. `your_answer` is
+ *  deliberately absent — the picture cannot know what the student put. */
+export interface ScannedQuestion {
+  question_text: string;
+  choices?: string[] | null;
+  correct_answer?: string | null;
+  subject?: string | null;
+  source?: string | null;
+  note?: string | null;
+}
