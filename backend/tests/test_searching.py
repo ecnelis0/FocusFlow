@@ -5,19 +5,19 @@ from __future__ import annotations
 import pytest
 
 MATH = {
-    "section": "math",
-    "source": "Bluebook Practice Test 4, Q17",
+    "subject": "Math",
+    "source": "Textbook chapter 4, Q17",
     "question_text": "A circle has a circumference of 12π. What is its area?",
     "your_answer": "12π",
     "correct_answer": "36π",
     "student_note": "Forgot to halve the diameter.",
 }
 VERBAL = {
-    "section": "reading_writing",
+    "subject": "Biology",
     "source": "Khan Academy drill",
-    "question_text": "Which choice provides the best evidence for the previous answer?",
-    "your_answer": "Lines 4-6",
-    "correct_answer": "Lines 20-22",
+    "question_text": "Which organelle is the site of cellular respiration?",
+    "your_answer": "Chloroplast",
+    "correct_answer": "Mitochondrion",
 }
 
 
@@ -48,11 +48,11 @@ async def test_search_ignores_case(client, term):
 
 
 async def test_you_can_search_by_where_the_question_came_from(client):
-    """ "Bluebook" and "Khan" found nothing at all before."""
-    bluebook = await _log(client, MATH)
+    """ "Textbook" and "Khan" found nothing at all before."""
+    textbook = await _log(client, MATH)
     khan = await _log(client, VERBAL)
 
-    assert await _search(client, "Bluebook") == [bluebook]
+    assert await _search(client, "Textbook") == [textbook]
     assert await _search(client, "Khan") == [khan]
 
 
@@ -61,7 +61,7 @@ async def test_you_can_search_by_an_answer(client):
     await _log(client, VERBAL)
 
     assert await _search(client, "36") == [circle]
-    assert await _search(client, "Lines 20-22") != [circle]
+    assert await _search(client, "Mitochondrion") != [circle]
 
 
 async def test_you_can_search_by_your_own_note(client):
@@ -73,7 +73,7 @@ async def test_you_can_search_by_your_own_note(client):
 
 async def test_you_can_search_by_topic(client):
     circle = await _log(client, MATH, topic="circles and arcs")
-    await _log(client, VERBAL, topic="command of evidence")
+    await _log(client, VERBAL, topic="cellular respiration")
 
     assert await _search(client, "arcs") == [circle]
 
@@ -86,15 +86,15 @@ async def test_words_may_appear_in_any_order_and_in_different_fields(client):
     assert await _search(client, "area circle") == [circle]
     assert await _search(client, "circle area") == [circle]
     # One word from the question, one from the source.
-    assert await _search(client, "Bluebook circumference") == [circle]
+    assert await _search(client, "Textbook circumference") == [circle]
 
 
 async def test_every_word_has_to_match_not_just_one(client):
     await _log(client, MATH)
     await _log(client, VERBAL)
 
-    # "circle" matches the first, "evidence" the second, so neither satisfies both.
-    assert await _search(client, "circle evidence") == []
+    # "circle" matches the first, "organelle" the second, so neither satisfies both.
+    assert await _search(client, "circle organelle") == []
 
 
 async def test_extra_spaces_do_not_break_a_search(client):

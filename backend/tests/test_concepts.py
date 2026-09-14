@@ -8,13 +8,13 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from tests.conftest import MATH_MISTAKE, VERBAL_MISTAKE
+from tests.conftest import BIOLOGY_MISTAKE, MATH_MISTAKE
 
 CONCEPT = {
     "title": "Circumference gives you the radius first",
     "body": "C = 2πr, so r = C / 2π. Every circle question that starts from the "
     "circumference needs this step before anything else.",
-    "section": "math",
+    "subject": "Math",
 }
 
 
@@ -33,15 +33,23 @@ async def test_a_concept_can_be_written_down(client):
 
     assert concept["title"] == CONCEPT["title"]
     assert concept["body"].startswith("C = 2πr")
-    assert concept["section"] == "math"
+    assert concept["subject"] == "Math"
     assert concept["question_count"] == 0
 
 
 async def test_a_concept_needs_only_a_title(client):
-    concept = await _concept(client, body=None, section=None)
+    concept = await _concept(client, body=None, subject=None)
 
     assert concept["body"] is None
-    assert concept["section"] is None
+    assert concept["subject"] is None
+
+
+async def test_a_concepts_subject_is_free_text_and_tidied(client):
+    concept = await _concept(client, subject="  Organic chemistry ")
+    blank = await _concept(client, title="Pacing", subject="   ")
+
+    assert concept["subject"] == "Organic chemistry"
+    assert blank["subject"] is None
 
 
 async def test_a_blank_title_is_rejected(client):
@@ -92,7 +100,7 @@ async def test_one_question_can_sit_under_several_concepts(client):
 async def test_a_concept_collects_many_questions(client):
     concept = await _concept(client)
     first = await _question(client)
-    second = await _question(client, VERBAL_MISTAKE)
+    second = await _question(client, BIOLOGY_MISTAKE)
 
     await client.post(f"/concepts/{concept['id']}/questions/{first}")
     await client.post(f"/concepts/{concept['id']}/questions/{second}")
@@ -146,7 +154,7 @@ async def test_a_concept_can_be_rewritten(client):
     updated = (
         await client.patch(
             f"/concepts/{concept['id']}",
-            json={"title": "Radius first, always", "body": "Shorter.", "section": "math"},
+            json={"title": "Radius first, always", "body": "Shorter.", "subject": "Math"},
         )
     ).json()
 
@@ -192,7 +200,7 @@ async def test_you_cannot_tag_someone_elses_question(client):
 
 async def test_the_bank_can_be_filtered_to_one_concept(client):
     tagged = await _question(client)
-    await _question(client, VERBAL_MISTAKE)
+    await _question(client, BIOLOGY_MISTAKE)
     concept = await _concept(client)
     await client.post(f"/concepts/{concept['id']}/questions/{tagged}")
 

@@ -11,8 +11,8 @@ test("logging a miss analyses it, files it in a slot, and arms the full ladder",
   const question = uniqueQuestion();
 
   await page.goto("/log");
-  await page.getByRole("button", { name: "Math", exact: true }).click();
-  await page.getByLabel("Where it came from").fill("Bluebook Practice Test 4, Q17");
+  await page.getByLabel("Subject").fill("Algebra");
+  await page.getByLabel("Where it came from").fill("Practice Test 4, Q17");
   await page.getByLabel("The question").fill(question);
   await page.getByLabel("Answer choices").fill("3\n5\n7\n15");
   await page.getByLabel("You put").fill("7");

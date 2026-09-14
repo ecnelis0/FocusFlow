@@ -8,7 +8,6 @@ import { UrgencyBadge } from "@/components/app/urgency-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api, keys } from "@/lib/api";
-import { SECTION_LABELS } from "@/lib/labels";
 import type { ConceptDetail } from "@/lib/types";
 
 /** Tag questions onto a concept from the concept's own page.
@@ -57,7 +56,7 @@ export function TagQuestions({ concept }: { concept: ConceptDetail }) {
       .join(" ")
       .toLowerCase();
     let score = words.filter((word) => haystack.includes(word)).length * 2;
-    if (concept.section && mistake.section === concept.section) score += 1;
+    if (concept.subject && mistake.subject === concept.subject) score += 1;
     return score;
   };
 
@@ -116,10 +115,11 @@ export function TagQuestions({ concept }: { concept: ConceptDetail }) {
                   >
                     <span className="mb-0.5 flex flex-wrap items-center gap-1.5">
                       {mistake.urgency && <UrgencyBadge urgency={mistake.urgency} />}
-                      <span className="text-[11px] text-muted-foreground">
-                        {SECTION_LABELS[mistake.section]}
-                        {mistake.topic && ` · ${mistake.topic}`}
-                      </span>
+                      {(mistake.subject || mistake.topic) && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {[mistake.subject, mistake.topic].filter(Boolean).join(" · ")}
+                        </span>
+                      )}
                     </span>
                     <span className="line-clamp-2 text-sm">{mistake.question_text}</span>
                   </button>

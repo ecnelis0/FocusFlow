@@ -60,11 +60,6 @@ class Base(DeclarativeBase):
     pass
 
 
-class Section(StrEnum):
-    reading_writing = "reading_writing"
-    math = "math"
-
-
 class AnalysisStatus(StrEnum):
     # Logged by hand with the AI deliberately not asked. Not a failure - a choice.
     not_requested = "not_requested"
@@ -101,9 +96,7 @@ class ErrorType(StrEnum):
     algebra_slip = "algebra_slip"
     unit_or_conversion = "unit_or_conversion"
     trap_answer = "trap_answer"
-    evidence_misread = "evidence_misread"
     vocabulary_gap = "vocabulary_gap"
-    grammar_rule_gap = "grammar_rule_gap"
     time_pressure_guess = "time_pressure_guess"
     other = "other"
 
@@ -157,8 +150,9 @@ class Concept(Base):
 
     title: Mapped[str] = mapped_column(String(200))
     body: Mapped[str | None] = mapped_column(Text)
-    # Optional: plenty of concepts (careless-work habits, pacing) belong to neither.
-    section: Mapped[str | None] = mapped_column(String(32), index=True)
+    # Free text ("Biology", "Calculus", "Spanish"). Optional: plenty of concepts
+    # (careless-work habits, pacing) belong to no subject in particular.
+    subject: Mapped[str | None] = mapped_column(String(80), index=True)
 
     mistakes: Mapped[list[Mistake]] = relationship(
         secondary=concept_mistakes,
@@ -183,7 +177,9 @@ class Mistake(Base):
 
     # What the student logged.
     source: Mapped[str | None] = mapped_column(String(200))
-    section: Mapped[str] = mapped_column(String(32))
+    # Free text, whatever the student calls the area ("Biology", "Calculus"). Not a
+    # closed vocabulary: the bank is for any subject, so the app cannot know them.
+    subject: Mapped[str | None] = mapped_column(String(80), index=True)
     question_text: Mapped[str] = mapped_column(Text)
     choices: Mapped[list | None] = mapped_column(JSON)
     your_answer: Mapped[str] = mapped_column(Text)

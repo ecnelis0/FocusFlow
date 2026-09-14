@@ -23,11 +23,17 @@ import {
   type Facets,
   NO_FACETS,
 } from "@/lib/facets";
-import { ERROR_TYPE_LABELS, SECTION_LABELS } from "@/lib/labels";
-import type { ErrorType, Section, Urgency } from "@/lib/types";
+import { ERROR_TYPE_LABELS } from "@/lib/labels";
+import type { ErrorType, Urgency } from "@/lib/types";
 
 /** One selected facet, with the click that removes it. */
-function Pill({ label, onRemove }: { label: React.ReactNode; onRemove: () => void }) {
+function Pill({
+  label,
+  onRemove,
+}: {
+  label: React.ReactNode;
+  onRemove: () => void;
+}) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/50 py-0.5 pr-1.5 pl-2.5 text-xs">
       {label}
@@ -81,7 +87,7 @@ function BankList() {
   const onlyEmptyConcept =
     facets.concept_ids.length === 1 &&
     facets.urgency.length === 0 &&
-    facets.section.length === 0 &&
+    facets.subjects.length === 0 &&
     facets.error_type.length === 0 &&
     facets.topics.length === 0 &&
     facets.hasConcept === null &&
@@ -101,10 +107,7 @@ function BankList() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="The bank"
-        lede="Every question you have missed, filed by what went wrong. Filters narrow each other."
-      />
+      <PageHeader title="The bank" />
 
       <Input
         value={facets.text}
@@ -124,7 +127,9 @@ function BankList() {
           ))}
           {facets.hasConcept !== null && (
             <Pill
-              label={facets.hasConcept ? "Filed under a concept" : "No concept yet"}
+              label={
+                facets.hasConcept ? "Filed under a concept" : "No concept yet"
+              }
               onRemove={() => apply({ ...facets, hasConcept: null })}
             />
           )}
@@ -135,11 +140,11 @@ function BankList() {
               onRemove={() => apply(toggle(facets, "urgency", value))}
             />
           ))}
-          {facets.section.map((value) => (
+          {facets.subjects.map((value) => (
             <Pill
               key={value}
-              label={SECTION_LABELS[value as Section]}
-              onRemove={() => apply(toggle(facets, "section", value))}
+              label={value}
+              onRemove={() => apply(toggle(facets, "subjects", value))}
             />
           ))}
           {facets.error_type.map((value) => (
@@ -191,7 +196,10 @@ function BankList() {
           body={emptyBody}
           action={
             onlyEmptyConcept
-              ? { href: `/concepts/${facets.concept_ids[0]}`, label: "Tag questions with it" }
+              ? {
+                  href: `/concepts/${facets.concept_ids[0]}`,
+                  label: "Tag questions with it",
+                }
               : { href: "/log", label: "Log a miss" }
           }
         />

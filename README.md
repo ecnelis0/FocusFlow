@@ -1,4 +1,4 @@
-# Mistake Bank — an SAT wrong-answer journal
+# FocusFlow — a wrong-answer journal for any subject
 
 You get a question wrong. You log it. An AI explains *why* you got it wrong and files
 it under the kind of mistake it was. Then it comes back — at **1 hour, 24 hours,
@@ -21,7 +21,7 @@ filters, a question detail page with the analysis and its ladder, and a review s
 Search looks at **every field, word by word**: the question, where it came from, both
 answers, your note, the topic and the AI's analysis. Each word must appear somewhere, so
 "area circle" finds a question about the area of a circle even though those words never
-sit next to each other, and "Bluebook" finds everything from that test.
+sit next to each other, and "midterm" finds everything from that source.
 
 ## Concepts
 
@@ -40,14 +40,103 @@ by it says which concept is empty rather than showing a bare "nothing matches". 
 also offers **"No concept yet"** — every question filed under nothing — and the dashboard
 says how many those are, so the gap is visible instead of something you find by scrolling.
 
-**The Concepts tab groups them by section** — Math, Reading & Writing, and one for
-concepts belonging to neither. Each opens to show its own concepts and nothing else.
+**The Concepts tab groups them by subject.** A subject is whatever you type — "Biology",
+"Calculus", "Spanish" — and the form offers the ones already in your bank so one subject
+does not end up spelled three ways. Concepts with no subject get their own group.
 
 Tag from either end: from a question's page, or from the concept's own page — there is
 a search-and-pick list at the bottom of every concept, and what you tag appears
 underneath it immediately. Every question in the bank shows the concepts it belongs to
 on its card. The rail filters the bank by concept alongside every other facet. Deleting
 a concept removes only the tags; the questions are untouched.
+
+## Scanning notes into concepts
+
+You do not have to type a concept to have one. **Scan notes** in the nav takes a photo of
+a handwritten page, a PDF, a text file, a pasted block of text, a **recording** — drop a
+file, or press *Record a voice note* and talk — or a **YouTube link**. For a video the
+captions are read (the uploader's, then YouTube's automatic ones); a video with none has
+its audio downloaded and transcribed locally, the same path a recording takes. The AI goes through the whole thing, every
+page, and lists **every concept it contains with a description of each**, and where it
+came from ("page 3").
+
+**It pulls out the practice questions too.** Every question the material poses — worked
+examples, exercises, quiz items, the questions a lecturer asks and then answers — is listed
+under the concept it exercises, with its answer. A lecture often poses none, so for any
+concept the material never questions the model writes one or two short ones itself, and
+they are labelled **"written for you"** so you can tell them apart. Approved questions go
+into the bank as *not attempted yet*, tagged `practice`, filed under their concept, and on
+the ladder from that moment — so they come round in Review, where you answer and get
+marked. Their source is the video's title or the kind of scan.
+
+**Nothing is filed until you say so.** The list comes back as a form: edit any title,
+description or subject, untick what you do not want, then *Approve and log*. Only then
+are the concepts written, with the picture attached to the ones it produced. Discard
+throws the whole proposal away.
+
+The model is handed the concepts already in your bank before it reads, so when the page
+covers something you already have, it proposes **adding to that concept** rather than
+filing it twice — shown as a ticked "Add to existing …" you can untick to file it as new.
+The result screen says which happened for each one ("new" or "added to existing") and
+links to each; a recording's transcript is shown so a mis-heard word is visible instead
+of silently filed.
+
+What the model sees is the bytes, not the filename: a text file named `.png` is read as
+text, and anything that is not a picture, a PDF, a recording or UTF-8 text is refused with
+a reason. Pictures are capped at 10MB, PDFs at 32MB, recordings at 25MB.
+
+Claude reads pictures and PDFs directly. It takes no audio, so **recordings are
+transcribed locally first** with Whisper (`faster-whisper`): no second API key, and the
+audio never leaves the machine — only the transcript goes to the extractor. It is an
+optional extra because it downloads a model on first use:
+
+```bash
+cd backend && uv sync --extra audio
+```
+
+Without it, an audio upload gets a 503 that says exactly that, and everything else still
+works. `GET /health` reports `transcriber` and `transcriber_ready`. With `AI_PROVIDER=stub`
+the offline extractor splits pasted text into paragraphs and calls each one a concept;
+it cannot read a picture, so it files the page as one placeholder concept with the picture
+attached. The endpoints are `POST /capture` (multipart: `file` or `text`, optional
+`subject`) which proposes, `POST /capture/commit` which files what was approved, and
+`DELETE /capture/source/{name}` which drops a discarded picture. `backend/app/analysis/extract.py`
+holds the contract, the stub and the Claude adapter, `backend/app/transcribe.py` the
+transcribers.
+
+## Reviewing: answer it, get marked
+
+A due review shows the question and, for a multiple-choice one, its choices. You pick or
+type an answer and press **Check answer**; the server marks it. Case, spacing and
+notation are forgiven (`36 pi` is `36π`, `x^2` is `x²`), and a choice can be given as its
+letter or its text. Right leaves the ladder alone; wrong sends the question back to the
+top, exactly as a self-reported miss did — and only then does the debrief appear, with
+the correct answer. **Skip** still exists for when you cannot answer now. The endpoint is
+`POST /reviews/{id}/answer`; `is_correct` in `backend/app/routers/reviews.py` is the marker.
+
+## The assistant sees the whole bank
+
+When you ask the panel something, the model is given two things: the rows your sentence
+matched, and **the entire bank as background** — every concept with what you wrote about
+it, every question with its subject, topic, reason, urgency, tags, concepts, takeaway,
+your note and its full review record, and the totals. So "what else is under that
+concept" or "how does this compare to my chemistry" can be answered without a second
+search. It is still told to count from what it is given, never to invent a row.
+`bank_context` in `backend/app/query.py` builds it; it is capped at the newest 300
+questions.
+
+## Demo data
+
+```bash
+cd backend && uv run python scripts/seed_demo.py --reset
+```
+
+Twenty questions across five subjects and ten concepts, logged over the past ten weeks
+with their review ladders played forward to today. Four different chain-rule questions
+are still wrong every time they come back; one stoichiometry question has been missed
+twice. Ask the bank *"which questions have I consistently been getting wrong in the past
+month"* and it should name the chain rule first. `--reset` removes only what the script
+added (every seeded source starts with `Seed:`).
 
 ## Your own labels
 
@@ -96,12 +185,12 @@ the matched rows, not by asking the model to count a list by eye.
 Example:
 
 > give me all the questions logged in the past 3 months that are very important and from
-> the reading category
+> biology
 
 The model does not answer from a recollection of your bank. It turns the sentence into a
 structured filter, the database runs it, and only then does the model get to speak — about
 rows that exist. So a count is a count and a list is the real list. The panel prints the
-filter it used ("Searched: very important, Reading & Writing, logged since 2026-06-09"), so
+filter it used ("Searched: very important, in Biology, logged since 2026-06-09"), so
 a misread sentence looks like a misread sentence rather than an empty bank. Each hit links
 straight to the question.
 
@@ -132,9 +221,9 @@ A single question wrong once is never dressed up as a pattern. A review answered
 is a repeat; the rungs that miss retires are bookkeeping and are excluded. The dashboard
 shows both under **"What keeps coming back"**, without needing to ask.
 
-**Categories** is the browsing half. Topics are folded under the section they belong to —
-click a section's arrow and its topics expand beneath it. Everything is a checkbox, and
-selections combine: **OR within a facet, AND across them**. So *Math + math fundamentals +
+**Categories** is the browsing half. Topics are folded under the subject they belong to —
+click a subject's arrow and its topics expand beneath it. Everything is a checkbox, and
+selections combine: **OR within a facet, AND across them**. So *Biology + cell respiration +
 concept gap + very important* is one click each and returns only questions satisfying all
 four. The chosen filters become the URL, so a filtered bank is a link you can share or come
 back to, and each one can be peeled off individually from the pills at the top of the bank.
@@ -145,7 +234,7 @@ Every question carries one of three levels, most urgent first:
 
 | | |
 |---|---|
-| **Fundamental concept** | The miss exposes a hole in something the rest of the section is built on. |
+| **Fundamental concept** | The miss exposes a hole in something the rest of the subject is built on. |
 | **Very important** | A high-frequency skill, or a trap you will walk into again. |
 | **Important** | Worth coming back to, but not what is costing you the most. |
 
@@ -195,9 +284,11 @@ Copy `.env.example` to `.env` at the repo root. Everything has a working default
 
 | Variable | Default | Notes |
 |---|---|---|
-| `DATABASE_URL` | `sqlite+aiosqlite:///./sat_bank.db` | Neon: `postgresql+asyncpg://…?ssl=require` |
-| `AI_PROVIDER` | `stub` | `stub` or `claude` |
+| `DATABASE_URL` | `sqlite+aiosqlite:///./mistake_bank.db` | Neon: `postgresql+asyncpg://…?ssl=require` |
+| `AI_PROVIDER` | `stub` | `stub`, `agent` (Claude plan, no key) or `claude` (API key) |
 | `ANTHROPIC_API_KEY` | — | Required when `AI_PROVIDER=claude` |
+| `TRANSCRIBER` | follows `AI_PROVIDER` | `stub` or `whisper`; see *Scanning notes* |
+| `WHISPER_MODEL` | `base` | Any faster-whisper size: `tiny`, `base`, `small`, `medium` |
 | `ANTHROPIC_MODEL` | `claude-opus-5` | |
 | `NEXT_PUBLIC_API_URL` | `http://127.0.0.1:8000` | Where the browser finds the API |
 
@@ -206,6 +297,19 @@ Copy `.env.example` to `.env` at the repo root. Everything has a working default
 Two lines in **`.env` at the repo root** — the file is already there, already
 gitignored, already `chmod 600`. Edit those two lines and restart the API. No code
 change:
+
+```
+AI_PROVIDER=agent
+```
+
+That is the **Claude Agent SDK** path: the API process drives the Claude Code CLI, and
+the CLI bills whatever `claude auth login` signed you into - a claude.ai plan, no API key.
+`claude auth status` must say `"loggedIn": true` on the machine running the API; `/health`
+checks the same thing and reports `analyzer_ready`. Pictures and PDFs go to the agent as
+files it reads with its own `Read` tool; text and transcripts go in the prompt; every
+answer comes back through the same structured-output schemas as the API adapter.
+
+Prefer a key? The API adapter is still there:
 
 ```
 AI_PROVIDER=claude
@@ -284,7 +388,7 @@ uv run alembic revision --autogenerate -m "what changed"   # review the file it 
 uv run alembic upgrade head                                # or just restart the API
 ```
 
-**A migration copies the database aside first**, to `~/Documents/sat_bank-backups/`,
+**A migration copies the database aside first**, to `~/Documents/mistake-bank-backups/`,
 keeping the last 20. To take one any time:
 
 ```bash
@@ -296,7 +400,7 @@ mistake that used to surface as `no such column` at the first query after a clea
 
 ## If the app looks empty
 
-Your questions live in `backend/sat_bank.db` and survive restarts, refreshes and new
+Your questions live in `backend/mistake_bank.db` and survive restarts, refreshes and new
 browsers. If a screen looks empty, check the API is running — it will say **"Can't reach
 the app's API"** rather than showing an empty bank. The database file is the whole of
 your data; copy it to back it up.

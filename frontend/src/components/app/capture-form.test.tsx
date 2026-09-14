@@ -1,0 +1,275 @@
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { CaptureForm } from "@/components/app/capture-form";
+import { api } from "@/lib/api";
+import {
+  approveCapture,
+  captureNotes,
+  discardCapture,
+  type CaptureProposal,
+  type CaptureResult,
+} from "@/lib/capture";
+import { renderWithQuery } from "@/test/render";
+
+vi.mock("sonner", () => ({
+  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn() }),
+}));
+
+// ESM namespace exports cannot be spied on; replace the functions the form calls.
+vi.mock("@/lib/capture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/capture")>()),
+  captureNotes: vi.fn(),
+  approveCapture: vi.fn(),
+  discardCapture: vi.fn(),
+}));
+
+const send = vi.mocked(captureNotes);
+const approve = vi.mocked(approveCapture);
+const discard = vi.mocked(discardCapture);
+
+const proposal: CaptureProposal = {
+  kind: "pdf",
+  extractor: "stub",
+  transcript: null,
+  summary: "Found 2 concepts in your notes.",
+  image_filename: null,
+  questions: [
+    {
+      question_text: "d/dx of sin(3x)?",
+      choices: null,
+      correct_answer: "3cos(3x)",
+      concept_title: "Chain rule",
+      where: "page 2",
+    },
+  ],
+  concepts: [
+    {
+      title: "Integration by parts",
+      body: "Pick u to be the thing that gets simpler.",
+      subject: "Calculus",
+      where: "page 1",
+      existing_id: null,
+      existing_title: null,
+    },
+    {
+      title: "Chain rule",
+      body: "Outside, keep the inside, times the inside's derivative.",
+      subject: null,
+      where: "page 2",
+      existing_id: "c2",
+      existing_title: "Chain rule",
+    },
+  ],
+};
+
+const filed: CaptureResult = {
+  questions: [],
+  changes: [
+    {
+      action: "created",
+      concept: {
+        id: "c1",
+        title: "IBP: u gets simpler",
+        body: "Pick u to be the thing that gets simpler.",
+        subject: "Calculus",
+        created_at: new Date().toISOString(),
+        updated_at: null,
+        question_count: 0,
+        images: [],
+      },
+    },
+  ],
+};
+
+async function scan(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText("Notes to file"), "some notes");
+  await user.click(screen.getByRole("button", { name: "Scan for concepts" }));
+  await screen.findByText("Check before filing");
+}
+
+describe("CaptureForm", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    send.mockReset();
+    approve.mockReset();
+    discard.mockReset();
+    vi.spyOn(api, "listConcepts").mockResolvedValue([]);
+  });
+
+  it("is disabled until there is something to send", () => {
+    renderWithQuery(<CaptureForm />);
+    expect(screen.getByRole("button", { name: "Scan for concepts" })).toBeDisabled();
+  });
+
+  it("shows every concept with its description for review, and files nothing yet", async () => {
+    send.mockResolvedValue(proposal);
+    const user = userEvent.setup();
+
+    renderWithQuery(<CaptureForm />);
+    await user.type(screen.getByLabelText("Notes to file"), "Chain rule: outside times inside");
+    await user.type(screen.getByLabelText("Subject"), "Calculus");
+    await user.click(screen.getByRole("button", { name: "Scan for concepts" }));
+
+    await waitFor(() =>
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({ text: "Chain rule: outside times inside", subject: "Calculus" }),
+      ),
+    );
+    await screen.findByText("Check before filing");
+
+    expect(screen.getByLabelText("Concept", { selector: "#draft-title-0" })).toHaveValue(
+      "Integration by parts",
+    );
+    expect(screen.getByLabelText("Description", { selector: "#draft-body-0" })).toHaveValue(
+      "Pick u to be the thing that gets simpler.",
+    );
+    expect(screen.getByLabelText("Concept", { selector: "#draft-title-1" })).toHaveValue(
+      "Chain rule",
+    );
+    expect(screen.getByText("page 1")).toBeInTheDocument();
+    // The model's match is shown as a choice, ticked by default.
+    expect(screen.getByRole("checkbox", { name: /Add to existing/ })).toBeChecked();
+    expect(screen.getByRole("button", { name: /^Approve and log 2 concepts/ })).toBeEnabled();
+    expect(approve).not.toHaveBeenCalled();
+  });
+
+  it("files what was kept, as edited", async () => {
+    send.mockResolvedValue(proposal);
+    approve.mockResolvedValue(filed);
+    const user = userEvent.setup();
+
+    renderWithQuery(<CaptureForm />);
+    await scan(user);
+
+    const title = screen.getByLabelText("Concept", { selector: "#draft-title-0" });
+    await user.clear(title);
+    await user.type(title, "IBP: u gets simpler");
+    // Strike the second one out, and refuse the merge on it too.
+    await user.click(screen.getByRole("checkbox", { name: "Keep concept 2" }));
+    await user.click(screen.getByRole("button", { name: /^Approve and log 1 concept/ }));
+
+    await waitFor(() =>
+      expect(approve).toHaveBeenCalledWith(
+        expect.objectContaining({
+          concepts: [
+            {
+              title: "IBP: u gets simpler",
+              body: "Pick u to be the thing that gets simpler.",
+              subject: "Calculus",
+              existing_id: null,
+            },
+          ],
+          image_filename: null,
+        }),
+      ),
+    );
+    expect(await screen.findByRole("link", { name: /IBP: u gets simpler/ })).toHaveAttribute(
+      "href",
+      "/concepts/c1",
+    );
+    expect(screen.getByText("new")).toBeInTheDocument();
+    expect(screen.queryByText("Check before filing")).not.toBeInTheDocument();
+  });
+
+  it("unticking the merge files a new concept instead", async () => {
+    send.mockResolvedValue(proposal);
+    approve.mockResolvedValue({ changes: [], questions: [] });
+    const user = userEvent.setup();
+
+    renderWithQuery(<CaptureForm />);
+    await scan(user);
+    await user.click(screen.getByRole("checkbox", { name: /Add to existing/ }));
+    await user.click(screen.getByRole("button", { name: /^Approve and log 2 concepts/ }));
+
+    await waitFor(() => expect(approve).toHaveBeenCalled());
+    const sent = approve.mock.calls[0][0];
+    expect(sent.concepts[1]).toMatchObject({ title: "Chain rule", existing_id: null });
+  });
+
+  it("practice questions are listed under their concept, editable, and filed on approval", async () => {
+    send.mockResolvedValue(proposal);
+    approve.mockResolvedValue({ changes: [], questions: [] });
+    const user = userEvent.setup();
+
+    renderWithQuery(<CaptureForm />);
+    await scan(user);
+
+    expect(screen.getByText("Practice questions")).toBeInTheDocument();
+    expect(screen.getByLabelText("Question")).toHaveValue("d/dx of sin(3x)?");
+    expect(screen.getByLabelText("Under concept")).toHaveValue("Chain rule");
+    expect(
+      screen.getByRole("button", { name: "Approve and log 2 concepts and 1 question" }),
+    ).toBeEnabled();
+
+    const answer = screen.getByLabelText("Answer");
+    await user.clear(answer);
+    await user.type(answer, "3 cos(3x)");
+    await user.selectOptions(screen.getByLabelText("Under concept"), "Integration by parts");
+    await user.click(screen.getByRole("button", { name: /Approve and log/ }));
+
+    await waitFor(() => expect(approve).toHaveBeenCalled());
+    expect(approve.mock.calls[0][0].questions).toEqual([
+      {
+        question_text: "d/dx of sin(3x)?",
+        choices: null,
+        correct_answer: "3 cos(3x)",
+        concept_titles: ["Integration by parts"],
+        origin: "material",
+      },
+    ]);
+  });
+
+  it("an unticked question is not filed", async () => {
+    send.mockResolvedValue(proposal);
+    approve.mockResolvedValue({ changes: [], questions: [] });
+    const user = userEvent.setup();
+
+    renderWithQuery(<CaptureForm />);
+    await scan(user);
+    await user.click(screen.getByRole("checkbox", { name: "Keep question 1" }));
+    expect(screen.getByRole("button", { name: "Approve and log 2 concepts" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Approve and log 2 concepts" }));
+
+    await waitFor(() => expect(approve).toHaveBeenCalled());
+    expect(approve.mock.calls[0][0].questions).toEqual([]);
+  });
+
+  it("discarding throws the proposal and its stored picture away", async () => {
+    send.mockResolvedValue({ ...proposal, kind: "image", image_filename: "abc.png" });
+    const user = userEvent.setup();
+
+    renderWithQuery(<CaptureForm />);
+    await scan(user);
+    await user.click(screen.getByRole("button", { name: "Discard" }));
+
+    expect(discard).toHaveBeenCalledWith("abc.png");
+    expect(screen.queryByText("Check before filing")).not.toBeInTheDocument();
+    expect(approve).not.toHaveBeenCalled();
+  });
+
+  it("offers the transcript of a recording behind a toggle", async () => {
+    send.mockResolvedValue({ ...proposal, kind: "audio", transcript: "Mitochondria make ATP." });
+    const user = userEvent.setup();
+
+    renderWithQuery(<CaptureForm />);
+    await scan(user);
+
+    const toggle = screen.getByRole("button", { name: "Show transcript" });
+    expect(screen.queryByText("Mitochondria make ATP.")).not.toBeInTheDocument();
+    await user.click(toggle);
+    expect(screen.getByText("Mitochondria make ATP.")).toBeInTheDocument();
+  });
+
+  it("says when nothing was worth filing rather than showing an empty list", async () => {
+    send.mockResolvedValue({ ...proposal, summary: "A shopping list.", concepts: [], questions: [] });
+    const user = userEvent.setup();
+
+    renderWithQuery(<CaptureForm />);
+    await scan(user);
+
+    expect(screen.getByText(/Nothing in there looked like a concept/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve and log 0 concepts" })).toBeDisabled();
+  });
+});

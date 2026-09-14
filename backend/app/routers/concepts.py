@@ -49,7 +49,7 @@ def _read(concept: Concept) -> ConceptRead:
         updated_at=concept.updated_at,
         title=concept.title,
         body=concept.body,
-        section=concept.section,
+        subject=concept.subject,
         question_count=len(concept.mistakes),
         images=concept.images,
     )
@@ -93,7 +93,7 @@ async def list_concepts(session: SessionDep, user_id: UserDep) -> list[ConceptRe
             updated_at=concept.updated_at,
             title=concept.title,
             body=concept.body,
-            section=concept.section,
+            subject=concept.subject,
             question_count=counts.get(concept.id, 0),
             images=concept.images,
         )

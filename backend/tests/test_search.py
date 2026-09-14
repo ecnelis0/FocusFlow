@@ -1,8 +1,8 @@
-"""Multi-facet search, and topics reported under the section they belong to."""
+"""Multi-facet search, and topics reported under the subject they belong to."""
 
 from __future__ import annotations
 
-from tests.conftest import MATH_MISTAKE, VERBAL_MISTAKE
+from tests.conftest import BIOLOGY_MISTAKE, MATH_MISTAKE
 
 
 async def _log(client, payload, **overrides):
@@ -13,32 +13,62 @@ async def _log(client, payload, **overrides):
     return mistake_id
 
 
-async def test_topics_are_grouped_under_their_section(client):
+async def test_topics_are_grouped_under_their_subject(client):
     await _log(client, MATH_MISTAKE, topic="linear equations")
     await _log(client, MATH_MISTAKE, topic="circles")
-    await _log(client, VERBAL_MISTAKE, topic="command of evidence")
+    await _log(client, BIOLOGY_MISTAKE, topic="cellular respiration")
 
     topics = (await client.get("/stats")).json()["topics"]
 
-    by_section: dict[str, set[str]] = {}
+    by_subject: dict[str, set[str]] = {}
     for entry in topics:
-        by_section.setdefault(entry["section"], set()).add(entry["topic"])
+        by_subject.setdefault(entry["subject"], set()).add(entry["topic"])
 
-    assert by_section["math"] == {"linear equations", "circles"}
-    assert by_section["reading_writing"] == {"command of evidence"}
-    # A topic is never reported loose - it always carries its section.
-    assert all(entry["section"] for entry in topics)
+    assert by_subject["Math"] == {"linear equations", "circles"}
+    assert by_subject["Biology"] == {"cellular respiration"}
 
 
-async def test_the_same_topic_in_two_sections_is_two_entries(client):
+async def test_a_topic_logged_with_no_subject_is_still_reported(client):
+    """Grouped under None rather than dropped, so the topic list adds up to the bank."""
+    await _log(client, {**MATH_MISTAKE, "subject": None}, topic="circles")
+
+    topics = (await client.get("/stats")).json()["topics"]
+
+    assert {"subject": None, "topic": "circles", "count": 1} in topics
+
+
+async def test_the_same_topic_in_two_subjects_is_two_entries(client):
     await _log(client, MATH_MISTAKE, topic="rates")
-    await _log(client, VERBAL_MISTAKE, topic="rates")
+    await _log(client, BIOLOGY_MISTAKE, topic="rates")
 
     topics = (await client.get("/stats")).json()["topics"]
     rates = [entry for entry in topics if entry["topic"] == "rates"]
 
     assert len(rates) == 2
-    assert {entry["section"] for entry in rates} == {"math", "reading_writing"}
+    assert {entry["subject"] for entry in rates} == {"Math", "Biology"}
+
+
+async def test_subjects_filter_as_whole_strings_ignoring_case(client):
+    """Free text on both sides: "math" must find "Math", and only "Math"."""
+    math = await _log(client, MATH_MISTAKE)
+    await _log(client, BIOLOGY_MISTAKE)
+    await _log(client, {**MATH_MISTAKE, "subject": "Mathematical logic"})
+
+    found = (await client.post("/mistakes/search", json={"subjects": ["math"]})).json()
+    shouted = (await client.post("/mistakes/search", json={"subjects": ["MATH"]})).json()
+
+    assert [m["id"] for m in found] == [math]
+    assert [m["id"] for m in shouted] == [math]
+
+
+async def test_subjects_or_within_the_facet(client):
+    math = await _log(client, MATH_MISTAKE)
+    biology = await _log(client, BIOLOGY_MISTAKE)
+    await _log(client, {**MATH_MISTAKE, "subject": "Spanish"})
+
+    found = (await client.post("/mistakes/search", json={"subjects": ["Math", "Biology"]})).json()
+
+    assert {m["id"] for m in found} == {math, biology}
 
 
 async def test_search_ands_across_facets(client):
@@ -69,7 +99,7 @@ async def test_search_ands_across_facets(client):
     )
     await _log(
         client,
-        VERBAL_MISTAKE,
+        BIOLOGY_MISTAKE,
         topic="math fundamentals",
         error_type="concept_gap",
         urgency="very_important",
@@ -79,7 +109,7 @@ async def test_search_ands_across_facets(client):
         await client.post(
             "/mistakes/search",
             json={
-                "section": ["math"],
+                "subjects": ["Math"],
                 "topics": ["math fundamentals"],
                 "error_type": ["concept_gap"],
                 "urgency": ["very_important"],
@@ -104,7 +134,7 @@ async def test_search_ors_within_a_facet(client):
 
 async def test_an_empty_search_returns_the_whole_bank(client):
     await _log(client, MATH_MISTAKE)
-    await _log(client, VERBAL_MISTAKE)
+    await _log(client, BIOLOGY_MISTAKE)
 
     found = (await client.post("/mistakes/search", json={})).json()
 
@@ -142,7 +172,7 @@ async def test_search_rejects_a_facet_value_that_is_not_in_the_vocabulary(client
 async def test_untagged_questions_can_be_singled_out(client):
     """The gap the side rail cannot show: questions filed under nothing."""
     tagged = await _log(client, MATH_MISTAKE)
-    untagged = await _log(client, VERBAL_MISTAKE)
+    untagged = await _log(client, BIOLOGY_MISTAKE)
     concept = (await client.post("/concepts", json={"title": "A concept"})).json()
     await client.post(f"/concepts/{concept['id']}/questions/{tagged}")
 
@@ -155,7 +185,7 @@ async def test_untagged_questions_can_be_singled_out(client):
 
 async def test_leaving_has_concept_unset_returns_both(client):
     tagged = await _log(client, MATH_MISTAKE)
-    await _log(client, VERBAL_MISTAKE)
+    await _log(client, BIOLOGY_MISTAKE)
     concept = (await client.post("/concepts", json={"title": "A concept"})).json()
     await client.post(f"/concepts/{concept['id']}/questions/{tagged}")
 
@@ -164,8 +194,8 @@ async def test_leaving_has_concept_unset_returns_both(client):
 
 async def test_stats_counts_the_questions_with_no_concept(client):
     tagged = await _log(client, MATH_MISTAKE)
-    await _log(client, VERBAL_MISTAKE)
-    await _log(client, VERBAL_MISTAKE)
+    await _log(client, BIOLOGY_MISTAKE)
+    await _log(client, BIOLOGY_MISTAKE)
     concept = (await client.post("/concepts", json={"title": "A concept"})).json()
     await client.post(f"/concepts/{concept['id']}/questions/{tagged}")
 

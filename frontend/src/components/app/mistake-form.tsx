@@ -11,17 +11,18 @@ import { z } from "zod";
 import { ConceptPicker } from "@/components/app/concept-picker";
 import { PendingImages, usePendingImages } from "@/components/app/pending-images";
 import { TagPicker } from "@/components/app/tag-picker";
+import { useSubjects } from "@/components/app/use-subjects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api, keys } from "@/lib/api";
-import { SECTION_LABELS, URGENCY_LABELS } from "@/lib/labels";
-import type { MistakeDraft, Section } from "@/lib/types";
+import { URGENCY_LABELS } from "@/lib/labels";
+import type { MistakeDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const schema = z.object({
-  section: z.enum(["reading_writing", "math"]),
+  subject: z.string().max(100).optional(),
   // "ai" means: leave it to the analyzer. Anything else is the student's own call
   // and the analyzer will not overrule it.
   urgency: z.enum(["ai", "fundamental", "very_important", "important"]),
@@ -53,6 +54,7 @@ export function MistakeForm() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const pictures = usePendingImages();
+  const subjects = useSubjects();
   const [tags, setTags] = useState<string[]>([]);
   const [conceptIds, setConceptIds] = useState<string[]>([]);
 
@@ -64,12 +66,11 @@ export function MistakeForm() {
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { section: "math", urgency: "ai" },
+    defaultValues: { urgency: "ai" },
   });
 
   // `useWatch` rather than `watch()`: the latter returns a fresh function each
   // render, which opts this component out of the React Compiler's memoization.
-  const section = useWatch({ control, name: "section" });
   const urgency = useWatch({ control, name: "urgency" });
 
   const log = useMutation({
@@ -114,7 +115,7 @@ export function MistakeForm() {
       log.mutate({
         analyze,
         draft: {
-          section: values.section,
+          subject: values.subject?.trim() || null,
           urgency: values.urgency === "ai" ? null : values.urgency,
           tags,
           concept_ids: conceptIds,
@@ -130,36 +131,34 @@ export function MistakeForm() {
 
   return (
     <form onSubmit={submitWith(true)} className="space-y-6" noValidate>
-      <fieldset>
-        <legend className="text-sm font-medium">Section</legend>
-        <div className="mt-2 flex gap-2">
-          {(Object.keys(SECTION_LABELS) as Section[]).map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={section === value}
-              onClick={() => setValue("section", value)}
-              className={cn(
-                "rounded-md border px-3 py-1.5 text-sm transition-colors",
-                section === value
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "hover:bg-muted",
-              )}
-            >
-              {SECTION_LABELS[value]}
-            </button>
-          ))}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="subject">Subject</Label>
+          <Input
+            id="subject"
+            list="subject-options"
+            placeholder="Biology, Calculus… optional"
+            autoComplete="off"
+            className="mt-1.5"
+            {...register("subject")}
+          />
+          {/* Native, so it works without a portal and reuses whatever is already in
+              the bank. Typing something new is still allowed. */}
+          <datalist id="subject-options">
+            {subjects.map((subject) => (
+              <option key={subject} value={subject} />
+            ))}
+          </datalist>
         </div>
-      </fieldset>
-
-      <div>
-        <Label htmlFor="source">Where it came from</Label>
-        <Input
-          id="source"
-          placeholder="Bluebook Practice Test 4, Q17"
-          className="mt-1.5"
-          {...register("source")}
-        />
+        <div>
+          <Label htmlFor="source">Where it came from</Label>
+          <Input
+            id="source"
+            placeholder="Practice Test 4, Q17"
+            className="mt-1.5"
+            {...register("source")}
+          />
+        </div>
       </div>
 
       <div>

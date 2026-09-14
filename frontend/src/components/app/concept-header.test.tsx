@@ -11,7 +11,7 @@ function concept(overrides: Partial<ConceptDetail> = {}): ConceptDetail {
     id: "c1",
     title: "Circumference gives you the radius first",
     body: "C = 2πr, so r = C / 2π.",
-    section: "math",
+    subject: "Algebra",
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: 3,
@@ -33,8 +33,17 @@ describe("ConceptHeader", () => {
       await screen.findByText("Circumference gives you the radius first"),
     ).toBeInTheDocument();
     expect(screen.getByText("C = 2πr, so r = C / 2π.")).toBeInTheDocument();
-    expect(screen.getByText("Math")).toBeInTheDocument();
+    expect(screen.getByText("Algebra")).toBeInTheDocument();
     expect(screen.getByText(/3 questions filed under this concept/)).toBeInTheDocument();
+  });
+
+  it("shows no subject badge when the concept has none", async () => {
+    vi.spyOn(api, "getConcept").mockResolvedValue(concept({ subject: null }));
+
+    renderWithQuery(<ConceptHeader conceptId="c1" />);
+
+    await screen.findByText("Circumference gives you the radius first");
+    expect(screen.queryByText("Algebra")).not.toBeInTheDocument();
   });
 
   it("shows the concept's diagrams", async () => {

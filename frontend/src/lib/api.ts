@@ -9,8 +9,8 @@ import type {
   Mistake,
   MistakeDraft,
   MistakeEdit,
+  ReviewAnswerResult,
   ReviewCompleteResult,
-  Section,
   Stats,
   StudentOutcome,
   TagCount,
@@ -58,7 +58,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export interface MistakeFilters {
   error_type?: ErrorType;
   urgency?: Urgency;
-  section?: Section;
+  subject?: string;
   topic?: string;
   q?: string;
 }
@@ -104,6 +104,13 @@ export const api = {
   dueReviews: () => request<DueReview[]>("/reviews/due"),
 
   upcomingReviews: () => request<DueReview[]>("/reviews/upcoming"),
+
+  /** Answer the question; the server marks it and moves the ladder. */
+  answerReview: (id: string, answer: string) =>
+    request<ReviewAnswerResult>(`/reviews/${id}/answer`, {
+      method: "POST",
+      body: JSON.stringify({ answer }),
+    }),
 
   completeReview: (id: string, outcome: StudentOutcome) =>
     request<ReviewCompleteResult>(`/reviews/${id}/complete`, {

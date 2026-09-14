@@ -8,9 +8,17 @@ describe("MistakeCard", () => {
   it("shows the slot the AI filed this under", () => {
     render(<MistakeCard mistake={makeMistake()} />);
 
-    // One metadata line now: section · slot · topic, so match within it.
+    // One metadata line: subject · slot · topic, so match within it.
+    expect(screen.getByText(/Algebra/)).toBeInTheDocument();
     expect(screen.getByText(/Careless arithmetic/)).toBeInTheDocument();
     expect(screen.getByText(/linear equations/)).toBeInTheDocument();
+  });
+
+  it("leaves the subject out of the metadata line when there is none", () => {
+    render(<MistakeCard mistake={makeMistake({ subject: null })} />);
+
+    expect(screen.getByText("Careless arithmetic · linear equations")).toBeInTheDocument();
+    expect(screen.queryByText(/Algebra/)).not.toBeInTheDocument();
   });
 
   it("says a review is due rather than counting down to it", () => {

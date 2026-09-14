@@ -23,14 +23,18 @@ async def _grouped(session, user_id: str, column) -> list[SlotCount]:
 
 
 async def _topics(session, user_id: str) -> list[TopicCount]:
-    """Topics grouped under the section they belong to, commonest first."""
+    """Topics grouped under the subject they were logged with, commonest first.
+
+    A question with no subject still has a topic; those are grouped under None
+    rather than dropped, so the topic list adds up to the bank.
+    """
     rows = await session.execute(
-        select(Mistake.section, Mistake.topic, func.count())
+        select(Mistake.subject, Mistake.topic, func.count())
         .where(Mistake.user_id == user_id, Mistake.topic.is_not(None))
-        .group_by(Mistake.section, Mistake.topic)
-        .order_by(Mistake.section, func.count().desc(), Mistake.topic)
+        .group_by(Mistake.subject, Mistake.topic)
+        .order_by(Mistake.subject, func.count().desc(), Mistake.topic)
     )
-    return [TopicCount(section=section, topic=topic, count=count) for section, topic, count in rows]
+    return [TopicCount(subject=subject, topic=topic, count=count) for subject, topic, count in rows]
 
 
 async def _concepts(session, user_id: str) -> list[SlotCount]:
@@ -84,6 +88,6 @@ async def stats(session: SessionDep, user_id: UserDep) -> Stats:
         by_error_type=await _grouped(session, user_id, Mistake.error_type),
         by_urgency=await _grouped(session, user_id, Mistake.urgency),
         by_concept=await _concepts(session, user_id),
-        by_section=await _grouped(session, user_id, Mistake.section),
+        by_subject=await _grouped(session, user_id, Mistake.subject),
         topics=await _topics(session, user_id),
     )

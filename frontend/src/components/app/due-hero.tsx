@@ -50,7 +50,7 @@ export function DueHero({ due, total }: { due: number; total: number }) {
       </div>
 
       <div className="mt-5 flex flex-wrap items-baseline gap-3.5">
-        <span className="font-[family-name:var(--font-display)] text-6xl leading-none font-semibold tracking-tight">
+        <span className="text-6xl leading-none font-bold tracking-tight">
           {nothingDue ? total : due}
         </span>
         <p

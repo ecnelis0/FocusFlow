@@ -41,7 +41,7 @@ def _mistake_with_ladder() -> Mistake:
     mistake = Mistake(
         id="m1",
         user_id="local",
-        section="math",
+        subject="Math",
         question_text="q",
         your_answer="7",
         correct_answer="5",

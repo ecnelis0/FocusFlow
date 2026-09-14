@@ -2,24 +2,18 @@
 
 import { useState } from "react";
 
-import { SelectField } from "@/components/app/fields";
 import { useUpdateMistake } from "@/components/app/use-mistake";
+import { useSubjects } from "@/components/app/use-subjects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { SECTION_LABELS } from "@/lib/labels";
-import type { Mistake, Section } from "@/lib/types";
-
-const SECTION_OPTIONS = (Object.keys(SECTION_LABELS) as Section[]).map((value) => ({
-  value,
-  label: SECTION_LABELS[value],
-}));
+import type { Mistake } from "@/lib/types";
 
 function QuestionEditor({ mistake, onDone }: { mistake: Mistake; onDone: () => void }) {
   const [draft, setDraft] = useState({
-    section: mistake.section,
+    subject: mistake.subject ?? "",
     source: mistake.source ?? "",
     question_text: mistake.question_text,
     choices: (mistake.choices ?? []).join("\n"),
@@ -28,6 +22,7 @@ function QuestionEditor({ mistake, onDone }: { mistake: Mistake; onDone: () => v
     student_note: mistake.student_note ?? "",
   });
   const save = useUpdateMistake(mistake.id, onDone);
+  const subjects = useSubjects();
 
   const field = <K extends keyof typeof draft>(key: K, value: (typeof draft)[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -43,7 +38,7 @@ function QuestionEditor({ mistake, onDone }: { mistake: Mistake; onDone: () => v
       onSubmit={(event) => {
         event.preventDefault();
         save.mutate({
-          section: draft.section,
+          subject: draft.subject.trim() || null,
           source: draft.source.trim() || null,
           question_text: draft.question_text.trim(),
           choices: choices.length > 0 ? choices : null,
@@ -54,12 +49,23 @@ function QuestionEditor({ mistake, onDone }: { mistake: Mistake; onDone: () => v
       }}
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <SelectField
-          label="Section"
-          value={draft.section}
-          options={SECTION_OPTIONS}
-          onChange={(value) => field("section", value)}
-        />
+        <div>
+          <Label htmlFor="edit-subject">Subject</Label>
+          <Input
+            id="edit-subject"
+            list="edit-subject-options"
+            autoComplete="off"
+            className="mt-1.5"
+            placeholder="Optional"
+            value={draft.subject}
+            onChange={(event) => field("subject", event.target.value)}
+          />
+          <datalist id="edit-subject-options">
+            {subjects.map((subject) => (
+              <option key={subject} value={subject} />
+            ))}
+          </datalist>
+        </div>
         <div>
           <Label htmlFor="edit-source">Where it came from</Label>
           <Input

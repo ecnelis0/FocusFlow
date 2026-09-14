@@ -144,7 +144,7 @@ def test_a_postgres_url_is_left_to_its_own_backups(blank):
 
 
 def test_a_relative_sqlite_path_resolves_next_to_the_backend(blank):
-    resolved = sqlite_path("sqlite+aiosqlite:///./sat_bank.db")
+    resolved = sqlite_path("sqlite+aiosqlite:///./mistake_bank.db")
 
     assert resolved is not None and resolved.is_absolute()
     assert resolved.parent.name == "backend"
@@ -157,3 +157,44 @@ def test_the_migration_can_be_rolled_back(blank):
     command.downgrade(_config(), "base")
 
     assert tables(blank) == set()
+
+
+def test_old_sections_become_readable_subjects(blank):
+    """A bank logged under the closed enum keeps its questions, under real names."""
+    command.upgrade(_config(), "a59cdac11524")
+    db = sqlite3.connect(blank)
+    try:
+        db.execute(
+            "INSERT INTO mistakes (id, user_id, created_at, section, question_text, your_answer,"
+            " correct_answer, analysis_status, urgency_is_yours, error_type)"
+            " VALUES ('m1', 'local', '2026-09-01 00:00:00', 'math', 'q', '1', '2', 'ready', 0,"
+            " 'careless_arithmetic'),"
+            " ('m2', 'local', '2026-09-01 00:00:00', 'reading_writing', 'q', 'a', 'b', 'ready',"
+            " 0, 'evidence_misread'),"
+            " ('m3', 'local', '2026-09-01 00:00:00', 'reading_writing', 'q', 'a', 'b', 'ready',"
+            " 0, 'grammar_rule_gap')"
+        )
+        db.execute(
+            "INSERT INTO concepts (id, user_id, created_at, title, section)"
+            " VALUES ('c1', 'local', '2026-09-01 00:00:00', 't', 'math'),"
+            " ('c2', 'local', '2026-09-01 00:00:00', 't', NULL)"
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    upgrade()
+
+    db = sqlite3.connect(blank)
+    try:
+        mistakes = dict(db.execute("SELECT id, subject FROM mistakes ORDER BY id"))
+        errors = dict(db.execute("SELECT id, error_type FROM mistakes ORDER BY id"))
+        concepts = dict(db.execute("SELECT id, subject FROM concepts ORDER BY id"))
+    finally:
+        db.close()
+
+    assert mistakes == {"m1": "Math", "m2": "Reading & Writing", "m3": "Reading & Writing"}
+    assert errors == {"m1": "careless_arithmetic", "m2": "other", "m3": "other"}
+    assert concepts == {"c1": "Math", "c2": None}
+    assert "section" not in columns(blank, "mistakes")
+    assert "section" not in columns(blank, "concepts")

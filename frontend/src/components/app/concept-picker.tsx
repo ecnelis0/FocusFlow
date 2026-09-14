@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
 import { api, keys } from "@/lib/api";
-import { SECTION_LABELS } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 /** File a question under concepts while logging it, rather than only afterwards. */
@@ -58,9 +57,9 @@ export function ConceptPicker({
             )}
           >
             {concept.title}
-            {concept.section && (
+            {concept.subject && (
               <span className={cn("ml-1", on ? "opacity-70" : "text-muted-foreground")}>
-                {SECTION_LABELS[concept.section]}
+                {concept.subject}
               </span>
             )}
           </button>

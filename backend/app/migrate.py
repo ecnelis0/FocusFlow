@@ -20,7 +20,7 @@ from sqlalchemy import create_engine
 from .config import get_settings
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-BACKUP_DIR = Path.home() / "Documents" / "sat_bank-backups"
+BACKUP_DIR = Path.home() / "Documents" / "mistake-bank-backups"
 KEEP_BACKUPS = 20
 
 

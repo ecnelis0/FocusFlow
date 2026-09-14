@@ -15,7 +15,7 @@ const EMPTY_QUERY: BankQuery = {
   has_concept: null,
   urgency: [],
   error_type: [],
-  section: [],
+  subjects: [],
   topics: [],
   text: null,
   logged_after: null,
@@ -48,7 +48,7 @@ describe("Ask", () => {
 
     renderWithQuery(<Ask />);
     const question =
-      "give me all the questions logged in the past 3 months that are very important and from the reading category";
+      "give me all the questions logged in the past 3 months that are very important and from biology";
     await user.type(screen.getByLabelText("Ask about your bank"), question);
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
@@ -58,15 +58,15 @@ describe("Ask", () => {
   it("shows the matching questions, not just the prose", async () => {
     const mistake = makeMistake();
     vi.spyOn(api, "ask").mockResolvedValue(
-      answer({ answer: "One very important Reading miss.", mistakes: [mistake] }),
+      answer({ answer: "One very important Biology miss.", mistakes: [mistake] }),
     );
     const user = userEvent.setup();
 
     renderWithQuery(<Ask />);
-    await user.type(screen.getByLabelText("Ask about your bank"), "very important reading");
+    await user.type(screen.getByLabelText("Ask about your bank"), "very important biology");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
-    expect(await screen.findByText("One very important Reading miss.")).toBeInTheDocument();
+    expect(await screen.findByText("One very important Biology miss.")).toBeInTheDocument();
     // Matched by text rather than a regex built from it: the question contains "+".
     const hit = screen.getByRole("link");
     expect(hit).toHaveAttribute("href", `/bank/${mistake.id}`);
@@ -76,18 +76,18 @@ describe("Ask", () => {
   it("shows what was actually searched, so a misread sentence is visible", async () => {
     vi.spyOn(api, "ask").mockResolvedValue(
       answer({
-        filter_description: "very important, Reading & Writing, logged since 2026-06-09",
+        filter_description: "very important, Biology, logged since 2026-06-09",
         mistakes: [],
       }),
     );
     const user = userEvent.setup();
 
     renderWithQuery(<Ask />);
-    await user.type(screen.getByLabelText("Ask about your bank"), "very important reading");
+    await user.type(screen.getByLabelText("Ask about your bank"), "very important biology");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(
-      await screen.findByText(/Searched: very important, Reading & Writing, logged since/),
+      await screen.findByText(/Searched: very important, Biology, logged since/),
     ).toBeInTheDocument();
     // An empty result must not read as "you have nothing to review".
     expect(screen.getByText("Nothing matched. Try a looser question.")).toBeInTheDocument();
@@ -102,7 +102,7 @@ describe("Ask", () => {
 
     await waitFor(() =>
       expect(ask).toHaveBeenCalledWith(
-        "Everything very important from Reading in the past 3 months",
+        "Everything very important from Biology in the past 3 months",
       ),
     );
   });
@@ -215,5 +215,24 @@ describe("Ask results", () => {
     const hit = await screen.findByRole("link");
     expect(within(hit).getByText("Fundamental concept")).toBeInTheDocument();
     expect(within(hit).getByText(/Careless arithmetic/)).toBeInTheDocument();
+  });
+
+  it("names the subject when the question has one, and nothing when it does not", async () => {
+    vi.spyOn(api, "ask").mockResolvedValue(
+      answer({
+        mistakes: [
+          makeMistake({ id: "a", subject: "Biology" }),
+          makeMistake({ id: "b", subject: null, error_type: null }),
+        ],
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderWithQuery(<Ask />);
+    await user.click(screen.getByRole("button", { name: /due for review now/ }));
+
+    const [withSubject, without] = await screen.findAllByRole("link");
+    expect(within(withSubject).getByText(/Biology/)).toBeInTheDocument();
+    expect(within(without).queryByText(/Biology|Algebra/)).not.toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-import type { BankQuery, ErrorType, Section, Urgency } from "./types";
+import type { BankQuery, ErrorType, Urgency } from "./types";
 
 /** The facets the bank can be sliced by. Each holds a list: OR inside, AND across. */
 export interface Facets {
@@ -7,7 +7,7 @@ export interface Facets {
   /** true = only questions with a concept, false = only those without. */
   hasConcept: boolean | null;
   urgency: Urgency[];
-  section: Section[];
+  subjects: string[];
   error_type: ErrorType[];
   topics: string[];
   text: string;
@@ -18,7 +18,7 @@ export const NO_FACETS: Facets = {
   tags: [],
   hasConcept: null,
   urgency: [],
-  section: [],
+  subjects: [],
   error_type: [],
   topics: [],
   text: "",
@@ -30,7 +30,7 @@ export function isEmpty(facets: Facets): boolean {
     facets.hasConcept === null &&
     facets.concept_ids.length === 0 &&
     facets.urgency.length === 0 &&
-    facets.section.length === 0 &&
+    facets.subjects.length === 0 &&
     facets.error_type.length === 0 &&
     facets.topics.length === 0 &&
     facets.text.trim() === ""
@@ -43,7 +43,7 @@ export function countSelected(facets: Facets): number {
     (facets.hasConcept === null ? 0 : 1) +
     facets.concept_ids.length +
     facets.urgency.length +
-    facets.section.length +
+    facets.subjects.length +
     facets.error_type.length +
     facets.topics.length
   );
@@ -51,7 +51,7 @@ export function countSelected(facets: Facets): number {
 
 /** Add or remove one value, leaving the other facets alone. */
 export function toggle<
-  K extends "urgency" | "section" | "error_type" | "topics" | "concept_ids" | "tags",
+  K extends "urgency" | "subjects" | "error_type" | "topics" | "concept_ids" | "tags",
 >(
   facets: Facets,
   key: K,
@@ -76,7 +76,7 @@ export function toSearchParams(facets: Facets): URLSearchParams {
   for (const value of facets.tags) params.append("tag", value);
   if (facets.hasConcept !== null) params.set("tagged", facets.hasConcept ? "1" : "0");
   for (const value of facets.urgency) params.append("urgency", value);
-  for (const value of facets.section) params.append("section", value);
+  for (const value of facets.subjects) params.append("subject", value);
   for (const value of facets.error_type) params.append("error_type", value);
   for (const value of facets.topics) params.append("topic", value);
   if (facets.text.trim()) params.set("q", facets.text.trim());
@@ -89,7 +89,7 @@ export function fromSearchParams(params: URLSearchParams | ReadonlyURLSearchPara
     tags: params.getAll("tag"),
     hasConcept: params.get("tagged") === null ? null : params.get("tagged") === "1",
     urgency: params.getAll("urgency") as Urgency[],
-    section: params.getAll("section") as Section[],
+    subjects: params.getAll("subject"),
     error_type: params.getAll("error_type") as ErrorType[],
     topics: params.getAll("topic"),
     text: params.get("q") ?? "",
@@ -108,7 +108,7 @@ export function toQuery(facets: Facets): Partial<BankQuery> {
     tags: facets.tags,
     has_concept: facets.hasConcept,
     urgency: facets.urgency,
-    section: facets.section,
+    subjects: facets.subjects,
     error_type: facets.error_type,
     topics: facets.topics,
     text: facets.text.trim() || null,

@@ -19,7 +19,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, keys } from "@/lib/api";
-import { SECTION_LABELS } from "@/lib/labels";
 
 export default function MistakePage() {
   const { id } = useParams<{ id: string }>();
@@ -66,9 +65,11 @@ export default function MistakePage() {
         {/* No urgency badge here: the debrief already carries one, and the same
             badge twice on one screen is a duplicate to read and to announce. The
             coloured spine on the question panel says it at a glance. */}
-        <Badge variant="outline" className="ml-auto">
-          {SECTION_LABELS[mistake.section]}
-        </Badge>
+        {mistake.subject && (
+          <Badge variant="outline" className="ml-auto">
+            {mistake.subject}
+          </Badge>
+        )}
       </div>
 
       <Panel

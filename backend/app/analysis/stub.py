@@ -10,41 +10,47 @@ from __future__ import annotations
 import re
 from datetime import date, timedelta
 
-from ..models import Difficulty, ErrorType, Section, Urgency
+from ..models import Difficulty, ErrorType, Urgency
 from ..query import BankQuery, Vocabulary
 from .base import MistakeAnalysis, MistakeInput
 
-_MATH_HINTS = {
+# One keyword -> topic map for every subject. It is a stand-in, not a taxonomy: the
+# point is that the offline analyzer files a question somewhere plausible.
+_TOPIC_HINTS = {
     "equation": "linear equations",
     "triangle": "geometry",
     "circle": "circles",
     "probability": "probability",
     "percent": "percentages",
     "function": "functions",
-}
-_VERBAL_HINTS = {
-    "underlined": "sentence structure",
-    "evidence": "command of evidence",
+    "derivative": "differentiation",
+    "integral": "integration",
+    "cell": "cell biology",
+    "photosynthesis": "photosynthesis",
+    "mole": "stoichiometry",
+    "force": "forces and motion",
     "author": "author's purpose",
-    "word": "words in context",
+    "evidence": "supporting evidence",
     "comma": "punctuation",
+    "verb": "verb forms",
+    "treaty": "treaties and diplomacy",
 }
+_FALLBACK_TOPIC = "general"
 
 
-def _guess_topic(text: str, section: str) -> str:
-    hints = _MATH_HINTS if section == "math" else _VERBAL_HINTS
+def _guess_topic(text: str) -> str:
     lowered = text.lower()
-    for needle, topic in hints.items():
+    for needle, topic in _TOPIC_HINTS.items():
         if needle in lowered:
             return topic
-    return "math fundamentals" if section == "math" else "reading comprehension"
+    return _FALLBACK_TOPIC
 
 
 def _guess_error_type(mistake: MistakeInput) -> ErrorType:
-    if mistake.section == "math":
-        both_numeric = all(_looks_numeric(v) for v in (mistake.your_answer, mistake.correct_answer))
-        return ErrorType.careless_arithmetic if both_numeric else ErrorType.concept_gap
-    return ErrorType.evidence_misread
+    # Two numbers that disagree is most likely a slip in the working; anything else
+    # is treated as not knowing the thing. Crude, but consistent across subjects.
+    both_numeric = all(_looks_numeric(v) for v in (mistake.your_answer, mistake.correct_answer))
+    return ErrorType.careless_arithmetic if both_numeric else ErrorType.concept_gap
 
 
 def _looks_numeric(value: str) -> bool:
@@ -59,9 +65,7 @@ def _looks_numeric(value: str) -> bool:
 _URGENT_ERRORS = {
     ErrorType.concept_gap: Urgency.fundamental,
     ErrorType.formula_error: Urgency.fundamental,
-    ErrorType.grammar_rule_gap: Urgency.fundamental,
     ErrorType.trap_answer: Urgency.very_important,
-    ErrorType.evidence_misread: Urgency.very_important,
     ErrorType.misread_question: Urgency.very_important,
 }
 
@@ -70,7 +74,7 @@ class StubAnalyzer:
     name = "stub"
 
     async def analyze(self, mistake: MistakeInput) -> MistakeAnalysis:
-        topic = _guess_topic(mistake.question_text, mistake.section)
+        topic = _guess_topic(mistake.question_text)
         error_type = _guess_error_type(mistake)
         return MistakeAnalysis(
             error_type=error_type,
@@ -93,7 +97,7 @@ class StubAnalyzer:
     async def interpret(self, question: str, today: date, vocabulary: Vocabulary) -> BankQuery:
         return _interpret(question, today, vocabulary)
 
-    async def summarise(self, question: str, digest: str) -> str:
+    async def summarise(self, question: str, digest: str, context: str = "") -> str:
         """Reports the counts it was given. It does not attempt to answer.
 
         When the question is about repetition, the repetition block is the part
@@ -136,14 +140,6 @@ _URGENCY_WORDS = (
     ("fundamental", Urgency.fundamental),
     ("very important", Urgency.very_important),
     ("important", Urgency.important),
-)
-
-_SECTION_WORDS = (
-    ("reading", Section.reading_writing),
-    ("writing", Section.reading_writing),
-    ("verbal", Section.reading_writing),
-    ("english", Section.reading_writing),
-    ("math", Section.math),
 )
 
 _UNITS = {
@@ -202,7 +198,7 @@ def _mentions(text: str, phrase: str) -> bool:
     """Does the question refer to this topic or concept?
 
     Whole phrase, or every meaningful word of it - so "circles" matches "circles"
-    and "command of evidence" matches "evidence command", but a concept titled
+    and "supporting evidence" matches "evidence supporting", but a concept titled
     "Read the question" is not dragged in by the word "the".
     """
     phrase = phrase.lower().strip()
@@ -235,18 +231,17 @@ def _interpret(question: str, today: date, vocabulary: Vocabulary) -> BankQuery:
             # "very important" contains "important"; the longer phrase wins.
             break
 
-    sections = {level for word, level in _SECTION_WORDS if word in text}
-
     error_types = [member for member in ErrorType if member.value.replace("_", " ") in text]
 
     # Match against what the bank actually holds rather than a hardcoded list: the
-    # student's own topics and concept titles are the words they will use.
+    # student's own subjects, topics and concept titles are the words they will use.
+    subjects = [subject for subject in vocabulary.subjects if _mentions(text, subject)]
     topics = [topic for topic in vocabulary.topics if _mentions(text, topic)]
     concepts = [title for title in vocabulary.concepts if _mentions(text, title)]
 
     return BankQuery(
         urgency=urgency,
-        section=sorted(sections),
+        subjects=subjects,
         error_type=error_types,
         topics=topics,
         concepts=concepts,

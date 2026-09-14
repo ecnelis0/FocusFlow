@@ -17,9 +17,9 @@ const PICKED: Facets = {
   tags: [],
   hasConcept: null,
   urgency: ["very_important"],
-  section: ["math"],
+  subjects: ["Calculus"],
   error_type: ["concept_gap"],
-  topics: ["math fundamentals"],
+  topics: ["limits"],
   text: "",
 };
 
@@ -27,7 +27,7 @@ describe("facets", () => {
   it("toggling adds then removes, leaving the other facets alone", () => {
     const added = toggle(NO_FACETS, "urgency", "fundamental");
     expect(added.urgency).toEqual(["fundamental"]);
-    expect(added.section).toEqual([]);
+    expect(added.subjects).toEqual([]);
 
     expect(toggle(added, "urgency", "fundamental").urgency).toEqual([]);
   });
@@ -70,9 +70,9 @@ describe("facets", () => {
 
     expect(query).toMatchObject({
       urgency: ["very_important"],
-      section: ["math"],
+      subjects: ["Calculus"],
       error_type: ["concept_gap"],
-      topics: ["math fundamentals"],
+      topics: ["limits"],
       text: "circle",
     });
   });
@@ -82,7 +82,7 @@ describe("facets", () => {
   });
 
   it("has() only reports a value that is actually selected", () => {
-    expect(has(PICKED, "section", "math")).toBe(true);
-    expect(has(PICKED, "section", "reading_writing")).toBe(false);
+    expect(has(PICKED, "subjects", "Calculus")).toBe(true);
+    expect(has(PICKED, "subjects", "Biology")).toBe(false);
   });
 });

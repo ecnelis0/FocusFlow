@@ -1,0 +1,55 @@
+# The whole app as a production deploy on one machine:
+#
+#   docker compose up --build -d
+#   docker compose exec backend python scripts/seed_demo.py --reset   # demo data
+#
+# API on http://localhost:8200, web on http://localhost:3200 - localhost, never
+# 127.0.0.1. Ports are deliberately not 8000/3000 so this never collides with a
+# `uv run uvicorn` / `next dev` session on the same machine.
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8200:8000"
+    environment:
+      # The database file and the uploaded pictures both live on the volume.
+      DATABASE_URL: sqlite+aiosqlite:////data/mistake_bank.db
+      UPLOAD_ROOT: /data/uploads
+
+      # Offline analyzer by default: no key, no network, works out of the box.
+      # For the real thing, comment these two out and use an API key instead:
+      #   AI_PROVIDER: claude
+      #   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      # `agent` is not an option in a container: it drives the `claude` CLI, whose
+      # login lives in the host's keychain. See docs/DEPLOY.md.
+      AI_PROVIDER: stub
+      ANTHROPIC_MODEL: claude-opus-5
+
+      # Recordings are transcribed locally; the `base` model is baked into the image.
+      # TRANSCRIBER: whisper
+      WHISPER_MODEL: base
+
+      # The browser's origin is the compose frontend, which is not on any default
+      # list. An origin that is not allowed gets a 400 on preflight and the app is
+      # a blank page, so this is load-bearing rather than hygiene.
+      CORS_ORIGINS: http://localhost:3200
+    volumes:
+      - bank-data:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Inlined into the client bundle at build time - changing it means a rebuild.
+        NEXT_PUBLIC_API_URL: http://localhost:8200
+    ports:
+      - "3200:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  bank-data:

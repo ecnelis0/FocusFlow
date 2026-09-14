@@ -1,7 +1,7 @@
 [project]
-name = "sat-bank-backend"
+name = "mistake-bank-backend"
 version = "0.1.0"
-description = "SAT mistake bank: AI error analysis + fixed spaced-review ladder"
+description = "Mistake bank for any subject: AI error analysis + fixed spaced-review ladder"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -16,7 +16,14 @@ dependencies = [
     "python-multipart>=0.0.32",
     "pillow>=12.3.0",
     "alembic>=1.19.2",
+    "claude-agent-sdk>=0.2.152",
+    "yt-dlp>=2026.8.19",
 ]
+
+[project.optional-dependencies]
+# Local speech-to-text for recorded notes. Pulls in CTranslate2 and downloads a
+# Whisper model on first use, so it is opt-in: `uv sync --extra audio`.
+audio = ["faster-whisper>=1.1"]
 
 [dependency-groups]
 dev = [

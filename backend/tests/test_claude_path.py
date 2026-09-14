@@ -38,7 +38,7 @@ def analyzer():
 async def test_the_debrief_comes_back_validated(analyzer):
     result = await analyzer.analyze(
         MistakeInput(
-            section="math",
+            subject="Math",
             question_text="A circle has a circumference of 12π. What is its area?",
             your_answer="12π",
             correct_answer="36π",
@@ -55,7 +55,7 @@ async def test_the_debrief_comes_back_validated(analyzer):
 async def test_the_request_is_the_shape_the_api_expects(analyzer):
     await analyzer.analyze(
         MistakeInput(
-            section="math",
+            subject="Math",
             question_text="q",
             your_answer="1",
             correct_answer="2",
@@ -64,6 +64,7 @@ async def test_the_request_is_the_shape_the_api_expects(analyzer):
 
     sent = anthropic_stub.seen[-1]
     assert sent["model"] == "claude-opus-5"
+    assert "Subject: Math" in sent["messages"][0]["content"]
     # Adaptive thinking, not a budget_tokens config that current models reject.
     assert sent["thinking"] == {"type": "adaptive"}
     assert "budget_tokens" not in sent.get("thinking", {})
@@ -89,13 +90,15 @@ async def test_the_model_is_told_what_this_bank_contains(analyzer):
         "the circles ones",
         TODAY,
         Vocabulary(
+            subjects=["Biology", "Math"],
             topics=["circles", "linear equations"],
             concepts=["Circumference gives the radius"],
-            sources=["Bluebook Practice Test 4"],
+            sources=["Practice Test 4"],
         ),
     )
 
     prompt = anthropic_stub.seen[-1]["messages"][0]["content"]
+    assert "Subjects in this bank: Biology, Math" in prompt
     assert "circles" in prompt
     assert "linear equations" in prompt
     assert "Circumference gives the radius" in prompt
@@ -116,7 +119,7 @@ async def test_a_refusal_is_reported_rather_than_returned_as_an_analysis(analyze
     monkeypatch.setattr(anthropic_stub, "STOP_REASON", "refusal")
     with pytest.raises(AnalysisFailed):
         await analyzer.analyze(
-            MistakeInput(section="math", question_text="q", your_answer="1", correct_answer="2")
+            MistakeInput(subject="Math", question_text="q", your_answer="1", correct_answer="2")
         )
 
 

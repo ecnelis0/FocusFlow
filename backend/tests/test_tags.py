@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tests.conftest import MATH_MISTAKE, VERBAL_MISTAKE
+from tests.conftest import BIOLOGY_MISTAKE, MATH_MISTAKE
 
 
 async def _log(client, **overrides):
@@ -196,7 +196,7 @@ async def test_you_cannot_file_a_question_under_someone_elses_concept(client):
 
     response = await client.post(
         "/mistakes",
-        json={**VERBAL_MISTAKE, "concept_ids": [concept["id"]]},
+        json={**BIOLOGY_MISTAKE, "concept_ids": [concept["id"]]},
         headers={"X-User-Id": "someone-else"},
     )
 

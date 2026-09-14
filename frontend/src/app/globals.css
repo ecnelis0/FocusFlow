@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-display);
+  --font-sans: var(--font-roboto), system-ui, sans-serif;
+  --font-mono: var(--font-roboto-mono), ui-monospace, monospace;
+  --font-heading: var(--font-roboto), system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,7 +49,7 @@
 }
 
 :root {
-  /* Mistake Bank palette. Names mirror the Figma "Colour" collection one-for-one
+  /* FocusFlow palette. Names mirror the Figma "Colour" collection one-for-one
      (bg/page, text/secondary, accent/base …) so the two cannot quietly drift.
      Warm paper rather than pure white: this is a study notebook, and hours of
      staring at it should not feel like staring at a spreadsheet. */
@@ -126,11 +126,10 @@
   * {
     @apply border-border outline-ring/50;
   }
-  /* Page titles carry the editorial voice; section headings stay in the body face
-     so a page does not turn into a magazine spread. */
+  /* Roboto for titles too; weight and tracking do the work a second face used to. */
   h1 {
-    font-family: var(--font-display), Georgia, serif;
-    letter-spacing: -0.022em;
+    font-family: var(--font-roboto), system-ui, sans-serif;
+    letter-spacing: -0.02em;
     line-height: 1.08;
   }
   h2,

@@ -15,7 +15,7 @@ const CONCEPTS = [
     id: "c1",
     title: "Circumference gives the radius",
     body: null,
-    section: "math" as const,
+    subject: "Algebra",
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: 2,
@@ -25,7 +25,7 @@ const CONCEPTS = [
     id: "c2",
     title: "inverse trig",
     body: null,
-    section: null,
+    subject: null,
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: 0,
@@ -47,20 +47,20 @@ const STATS: Stats = {
     { key: "fundamental", count: 1 },
     { key: "very_important", count: 3 },
   ],
-  by_section: [
-    { key: "math", count: 4 },
-    { key: "reading_writing", count: 2 },
+  by_subject: [
+    { key: "Algebra", count: 4 },
+    { key: "Biology", count: 2 },
   ],
   topics: [
-    { section: "math", topic: "math fundamentals", count: 3 },
-    { section: "math", topic: "circles", count: 1 },
-    { section: "reading_writing", topic: "command of evidence", count: 2 },
+    { subject: "Algebra", topic: "linear equations", count: 3 },
+    { subject: "Algebra", topic: "circles", count: 1 },
+    { subject: "Biology", topic: "cell division", count: 2 },
   ],
 };
 
-/** Expands Math, where the sectioned concepts now live. */
-async function openMath(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole("button", { name: "Expand Math" }));
+/** Expands Algebra, where its concepts live. */
+async function openAlgebra(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: "Expand Algebra" }));
 }
 
 async function open() {
@@ -78,51 +78,51 @@ describe("Categories", () => {
     push.mockClear();
   });
 
-  it("keeps topics folded away until their section is expanded", async () => {
+  it("keeps topics folded away until their subject is expanded", async () => {
     const user = await open();
 
-    expect(screen.queryByText("math fundamentals")).not.toBeInTheDocument();
-    expect(screen.queryByText("command of evidence")).not.toBeInTheDocument();
+    expect(screen.queryByText("linear equations")).not.toBeInTheDocument();
+    expect(screen.queryByText("cell division")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Expand Math" }));
+    await user.click(screen.getByRole("button", { name: "Expand Algebra" }));
 
-    expect(screen.getByText("math fundamentals")).toBeInTheDocument();
+    expect(screen.getByText("linear equations")).toBeInTheDocument();
     expect(screen.getByText("circles")).toBeInTheDocument();
-    // Only that section's topics - the other folder stays shut.
-    expect(screen.queryByText("command of evidence")).not.toBeInTheDocument();
+    // Only that subject's topics - the other folder stays shut.
+    expect(screen.queryByText("cell division")).not.toBeInTheDocument();
   });
 
-  it("puts each topic under the section it belongs to", async () => {
+  it("puts each topic under the subject it belongs to", async () => {
     const user = await open();
-    await user.click(screen.getByRole("button", { name: "Expand Reading & Writing" }));
+    await user.click(screen.getByRole("button", { name: "Expand Biology" }));
 
-    expect(screen.getByText("command of evidence")).toBeInTheDocument();
-    expect(screen.queryByText("math fundamentals")).not.toBeInTheDocument();
+    expect(screen.getByText("cell division")).toBeInTheDocument();
+    expect(screen.queryByText("linear equations")).not.toBeInTheDocument();
   });
 
   it("collapses again", async () => {
     const user = await open();
-    await user.click(screen.getByRole("button", { name: "Expand Math" }));
-    await user.click(screen.getByRole("button", { name: "Collapse Math" }));
+    await user.click(screen.getByRole("button", { name: "Expand Algebra" }));
+    await user.click(screen.getByRole("button", { name: "Collapse Algebra" }));
 
     expect(screen.queryByText("circles")).not.toBeInTheDocument();
   });
 
-  it("will not offer to expand a section with no topics", async () => {
+  it("will not offer to expand a subject with no topics", async () => {
     vi.spyOn(api, "stats").mockResolvedValue({ ...STATS, topics: [] });
     renderWithQuery(<Categories />);
     await screen.findByText("How urgent");
 
-    expect(screen.getByRole("button", { name: "Expand Math" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Expand Algebra" })).toBeDisabled();
   });
 
   it("selects across facets at once and sends all four to the bank", async () => {
     const user = await open();
 
     await user.click(screen.getByRole("checkbox", { name: /Very important/ }));
-    await user.click(screen.getByRole("checkbox", { name: /^Math/ }));
-    await user.click(screen.getByRole("button", { name: "Expand Math" }));
-    await user.click(screen.getByRole("checkbox", { name: /math fundamentals/ }));
+    await user.click(screen.getByRole("checkbox", { name: /^Algebra/ }));
+    await user.click(screen.getByRole("button", { name: "Expand Algebra" }));
+    await user.click(screen.getByRole("checkbox", { name: /linear equations/ }));
     await user.click(screen.getByRole("checkbox", { name: /Concept gap/ }));
 
     await user.click(screen.getByRole("button", { name: "Show 4 filters" }));
@@ -131,8 +131,8 @@ describe("Categories", () => {
     const url = new URL(push.mock.calls[0][0], "http://x");
     expect(url.pathname).toBe("/bank");
     expect(url.searchParams.getAll("urgency")).toEqual(["very_important"]);
-    expect(url.searchParams.getAll("section")).toEqual(["math"]);
-    expect(url.searchParams.getAll("topic")).toEqual(["math fundamentals"]);
+    expect(url.searchParams.getAll("subject")).toEqual(["Algebra"]);
+    expect(url.searchParams.getAll("topic")).toEqual(["linear equations"]);
     expect(url.searchParams.getAll("error_type")).toEqual(["concept_gap"]);
   });
 
@@ -158,13 +158,29 @@ describe("Categories", () => {
     expect(screen.getByRole("button", { name: "Show questions" })).toBeDisabled();
   });
 
+  it("lists a subject that only a concept carries, so it has somewhere to appear", async () => {
+    vi.spyOn(api, "stats").mockResolvedValue({ ...STATS, by_subject: [], topics: [] });
+    vi.spyOn(api, "listConcepts").mockResolvedValue([
+      { ...CONCEPTS[0], subject: "Chemistry" },
+    ]);
+    const user = userEvent.setup();
+    renderWithQuery(<Categories />);
+
+    const row = await screen.findByRole("checkbox", { name: /^Chemistry/ });
+    expect(within(row).getByText("0")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Expand Chemistry" }));
+    expect(
+      screen.getByRole("checkbox", { name: /Circumference gives the radius/ }),
+    ).toBeInTheDocument();
+  });
+
   it("shows how many questions sit behind each row", async () => {
     const user = await open();
-    const math = screen.getByRole("checkbox", { name: /^Math/ });
-    expect(within(math).getByText("4")).toBeInTheDocument();
+    const algebra = screen.getByRole("checkbox", { name: /^Algebra/ });
+    expect(within(algebra).getByText("4")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Expand Math" }));
-    const topic = screen.getByRole("checkbox", { name: /math fundamentals/ });
+    await user.click(screen.getByRole("button", { name: "Expand Algebra" }));
+    const topic = screen.getByRole("checkbox", { name: /linear equations/ });
     expect(within(topic).getByText("3")).toBeInTheDocument();
   });
 });
@@ -179,11 +195,11 @@ describe("Categories concepts", () => {
   it("warns that a concept has nothing tagged, rather than letting you find out by clicking", async () => {
     const user = await open();
 
-    // This one belongs to no section, so it sits in its own group.
+    // This one has no subject, so it sits in its own group.
     const empty = await screen.findByRole("checkbox", { name: /inverse trig/ });
     expect(within(empty).getByText("nothing tagged")).toBeInTheDocument();
 
-    await openMath(user);
+    await openAlgebra(user);
     const full = screen.getByRole("checkbox", { name: /Circumference gives the radius/ });
     expect(within(full).queryByText("nothing tagged")).not.toBeInTheDocument();
   });
@@ -200,7 +216,7 @@ describe("Categories concepts", () => {
 
   it("filters by a concept id, not by its title", async () => {
     const user = await open();
-    await openMath(user);
+    await openAlgebra(user);
 
     await user.click(
       screen.getByRole("checkbox", { name: /Circumference gives the radius/ }),
@@ -221,7 +237,7 @@ describe("Categories concept links", () => {
 
   it("offers a way to open the concept itself, not only to filter by it", async () => {
     const user = await open();
-    await openMath(user);
+    await openAlgebra(user);
 
     const link = await screen.findByRole("link", {
       name: "Open Circumference gives the radius",
@@ -229,14 +245,14 @@ describe("Categories concept links", () => {
     expect(link).toHaveAttribute("href", "/concepts/c1");
   });
 
-  it("keeps a section's concepts folded away until the section is opened", async () => {
+  it("keeps a subject's concepts folded away until the subject is opened", async () => {
     const user = await open();
 
     expect(
       screen.queryByRole("checkbox", { name: /Circumference gives the radius/ }),
     ).not.toBeInTheDocument();
 
-    await openMath(user);
+    await openAlgebra(user);
 
     expect(
       screen.getByRole("checkbox", { name: /Circumference gives the radius/ }),
@@ -247,7 +263,7 @@ describe("Categories concept links", () => {
 
   it("keeps that link out of the checkbox rather than nested inside it", async () => {
     const user = await open();
-    await openMath(user);
+    await openAlgebra(user);
 
     const box = await screen.findByRole("checkbox", {
       name: /Circumference gives the radius/,

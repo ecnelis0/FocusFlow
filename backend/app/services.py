@@ -12,7 +12,7 @@ from .models import AnalysisStatus, Mistake, mistake_options, utcnow
 
 def to_input(mistake: Mistake) -> MistakeInput:
     return MistakeInput(
-        section=mistake.section,
+        subject=mistake.subject,
         question_text=mistake.question_text,
         choices=mistake.choices,
         your_answer=mistake.your_answer,

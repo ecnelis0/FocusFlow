@@ -56,8 +56,8 @@ async def messages(request: Request) -> dict:
         if "why_wrong" in payload:
             payload["why_wrong"] = "You solved for 3x and stopped there."
             payload["topic"] = "linear equations"
-        if "section" in payload and isinstance(payload["section"], list):
-            payload["section"] = ["math"]
+        if "subjects" in payload and isinstance(payload["subjects"], list):
+            payload["subjects"] = ["Math"]
         text = json.dumps(payload)
     else:
         text = "Three of your four misses are concept gaps in circles."

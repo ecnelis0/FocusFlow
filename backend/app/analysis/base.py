@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 class MistakeInput(BaseModel):
     """What an analyzer is given. Deliberately not the ORM object."""
 
-    section: str
+    subject: str | None = None
     question_text: str
     choices: list[str] | None = None
     your_answer: str
@@ -38,13 +38,13 @@ class MistakeAnalysis(BaseModel):
         description="The single best-fitting reason this student got the question wrong."
     )
     topic: str = Field(
-        description="Short SAT topic label, e.g. 'systems of linear equations' or "
-        "'command of evidence'. Title-free, lowercase, under 60 characters."
+        description="Short topic label, e.g. 'systems of linear equations' or "
+        "'cell respiration'. Title-free, lowercase, under 60 characters."
     )
     difficulty: Difficulty
     urgency: Urgency = Field(
         description="How badly this needs revisiting. 'fundamental' when the miss "
-        "exposes a hole in something the rest of the section is built on; "
+        "exposes a hole in something the rest of the subject is built on; "
         "'very_important' for a high-frequency skill or a trap they will meet again; "
         "'important' otherwise. Judge the gap, not the question's difficulty."
     )
@@ -82,6 +82,12 @@ class Analyzer(Protocol):
         """
         ...
 
-    async def summarise(self, question: str, digest: str) -> str:
-        """Answer in a sentence or two, using only the rows it is given."""
+    async def summarise(self, question: str, digest: str, context: str = "") -> str:
+        """Answer from the matched rows, with the whole bank as background.
+
+        `digest` is what the filter matched and is what the answer is about;
+        `context` is everything else - every concept, every question, every review
+        - so "how does this compare" and "what else is under that concept" can be
+        answered without a second search.
+        """
         ...

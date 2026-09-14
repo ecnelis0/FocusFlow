@@ -16,7 +16,7 @@ test("clicking a concept shows the concept itself, then its questions", async ({
   const question = `Circle area question ${stamp} [e2e]`;
 
   await logQuestion(page, {
-    source: `Bluebook ${stamp}`,
+    source: `Practice paper ${stamp}`,
     question,
     yours: "12π",
     correct: "36π",
@@ -26,7 +26,7 @@ test("clicking a concept shows the concept itself, then its questions", async ({
   await page.getByRole("button", { name: /Write (a|your first) concept/ }).first().click();
   await page.getByLabel("The concept").fill(title);
   await page.getByLabel("In your own words").fill(`C = 2πr, so r = C / 2π. [${stamp}]`);
-  await page.getByRole("button", { name: "Math", exact: true }).click();
+  await page.getByLabel("Subject").fill("Algebra");
   await page.getByRole("button", { name: "Add concept" }).click();
   await expect(page.getByText(title)).toBeVisible();
 
@@ -40,7 +40,7 @@ test("clicking a concept shows the concept itself, then its questions", async ({
   await page.getByRole("button", { name: "Ask the bank" }).click();
   const panel = page.getByRole("complementary", { name: "Ask the bank" });
   await panel.getByRole("tab", { name: "Categories" }).click();
-  await panel.getByRole("button", { name: "Expand Math" }).click();
+  await panel.getByRole("button", { name: "Expand Algebra" }).click();
   await panel.getByRole("checkbox", { name: new RegExp(title) }).click();
   await panel.getByRole("button", { name: "Show 1 filter" }).click();
 
@@ -61,15 +61,15 @@ test("the rail can open a concept's own page, not only filter by it", async ({ p
   await page.goto("/concepts");
   await page.getByRole("button", { name: /Write (a|your first) concept/ }).first().click();
   await page.getByLabel("The concept").fill(title);
-  await page.getByRole("button", { name: "Math", exact: true }).click();
+  await page.getByLabel("Subject").fill("Algebra");
   await page.getByRole("button", { name: "Add concept" }).click();
   await expect(page.getByText(title)).toBeVisible();
 
   await page.getByRole("button", { name: "Ask the bank" }).click();
   const panel = page.getByRole("complementary", { name: "Ask the bank" });
   await panel.getByRole("tab", { name: "Categories" }).click();
-  // Concepts live under their section now, so open it first.
-  await panel.getByRole("button", { name: "Expand Math" }).click();
+  // Concepts live under their subject, so open it first.
+  await panel.getByRole("button", { name: "Expand Algebra" }).click();
   await panel.getByRole("link", { name: `Open ${title}` }).click();
 
   await expect(page).toHaveURL(/\/concepts\/[0-9a-f]{32}/);
@@ -84,7 +84,7 @@ test("tagging finds a question by its source, its answer, or words in any order"
   const question = `A circle has a circumference of 12π. What is its area? ${stamp}`;
 
   await logQuestion(page, {
-    source: `Bluebook Practice Test 4 ${stamp}`,
+    source: `Practice Test 4 ${stamp}`,
     question,
     yours: "12π",
     correct: `36π ${stamp}`,
@@ -93,7 +93,7 @@ test("tagging finds a question by its source, its answer, or words in any order"
   await page.goto("/concepts");
   await page.getByRole("button", { name: /Write (a|your first) concept/ }).first().click();
   await page.getByLabel("The concept").fill(title);
-  await page.getByRole("button", { name: "Math", exact: true }).click();
+  await page.getByLabel("Subject").fill("Algebra");
   await page.getByRole("button", { name: "Add concept" }).click();
   await expect(page.getByText(title)).toBeVisible();
   await page.getByText(title).click();
@@ -103,7 +103,7 @@ test("tagging finds a question by its source, its answer, or words in any order"
   const hit = page.getByRole("button", { name: new RegExp(`circumference of 12`) });
 
   // By where it came from - found nothing before.
-  await search.fill(`Bluebook ${stamp}`);
+  await search.fill(`Test 4 ${stamp}`);
   await expect(hit).toBeVisible({ timeout: 10_000 });
 
   // By the answer - found nothing before.

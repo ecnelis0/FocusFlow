@@ -5,23 +5,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { PendingImages, usePendingImages } from "@/components/app/pending-images";
+import { useSubjects } from "@/components/app/use-subjects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api, keys } from "@/lib/api";
-import { SECTION_LABELS } from "@/lib/labels";
-import type { Concept, Section } from "@/lib/types";
-import { cn } from "@/lib/utils";
-
-/** Math and Reading & Writing first, because they are the answer nearly every time.
- *  "Neither" stays available but has to be chosen: it used to be the default, so the
- *  field was a thing to skip rather than a decision, and concepts piled up unfiled. */
-const SECTION_OPTIONS: { value: Section | "none"; label: string }[] = [
-  { value: "math", label: SECTION_LABELS.math },
-  { value: "reading_writing", label: SECTION_LABELS.reading_writing },
-  { value: "none", label: "Neither" },
-];
+import type { Concept } from "@/lib/types";
 
 /** Writes a new concept, or edits one in place when `concept` is given. */
 export function ConceptForm({
@@ -34,11 +24,8 @@ export function ConceptForm({
   const queryClient = useQueryClient();
   const [title, setTitle] = useState(concept?.title ?? "");
   const [body, setBody] = useState(concept?.body ?? "");
-  // Unset, not "none": an unanswered question and an answer of "neither" are
-  // different things, and only one of them should be possible by accident.
-  const [section, setSection] = useState<Section | "none" | null>(
-    concept ? (concept.section ?? "none") : null,
-  );
+  const [subject, setSubject] = useState(concept?.subject ?? "");
+  const subjects = useSubjects();
   // Only when writing a new one: an existing concept uploads straight to its own page.
   const diagrams = usePendingImages();
 
@@ -47,7 +34,7 @@ export function ConceptForm({
       const draft = {
         title: title.trim(),
         body: body.trim() || null,
-        section: section === "none" || section === null ? null : section,
+        subject: subject.trim() || null,
       };
       if (concept) return api.updateConcept(concept.id, draft);
 
@@ -77,7 +64,7 @@ export function ConceptForm({
       if (!concept) {
         setTitle("");
         setBody("");
-        setSection(null);
+        setSubject("");
         diagrams.clear();
       }
       toast.success(concept ? "Saved." : "Concept added.");
@@ -134,44 +121,32 @@ export function ConceptForm({
         </div>
       )}
 
-      <fieldset>
-        <legend className="text-sm font-medium">Which section?</legend>
+      <div>
+        <Label htmlFor="concept-subject">Subject</Label>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Concepts are filed under their section, and the side rail expands to show
-          them there.
+          Optional. Concepts are filed under their subject, and the side rail expands
+          to show them there.
         </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {SECTION_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={section === option.value}
-              onClick={() => setSection(option.value)}
-              className={cn(
-                "rounded-md border px-3 py-1.5 text-sm transition-colors",
-                section === option.value
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "hover:bg-muted",
-              )}
-            >
-              {option.label}
-            </button>
+        <Input
+          id="concept-subject"
+          list="concept-subject-options"
+          autoComplete="off"
+          className="mt-1.5"
+          placeholder="Biology, Calculus…"
+          value={subject}
+          onChange={(event) => setSubject(event.target.value)}
+        />
+        <datalist id="concept-subject-options">
+          {subjects.map((option) => (
+            <option key={option} value={option} />
           ))}
-        </div>
-      </fieldset>
+        </datalist>
+      </div>
 
       <div className="flex gap-2">
-        <Button
-          type="submit"
-          disabled={save.isPending || !title.trim() || section === null}
-        >
+        <Button type="submit" disabled={save.isPending || !title.trim()}>
           {save.isPending ? "Saving…" : concept ? "Save" : "Add concept"}
         </Button>
-        {section === null && title.trim() && (
-          <p className="self-center text-xs text-muted-foreground">
-            Pick a section first.
-          </p>
-        )}
         {concept && onDone && (
           <Button type="button" variant="ghost" onClick={() => onDone(concept)}>
             Cancel

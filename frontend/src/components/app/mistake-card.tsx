@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { Panel, SPINE } from "@/components/app/panel";
 import { UrgencyBadge } from "@/components/app/urgency-badge";
-import { ERROR_TYPE_LABELS, SECTION_LABELS } from "@/lib/labels";
+import { ERROR_TYPE_LABELS } from "@/lib/labels";
 import type { Mistake } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +29,15 @@ export function MistakeCard({ mistake }: { mistake: Mistake }) {
           ? "no analysis"
           : null;
 
+  // Subject · slot · topic, skipping whatever is missing. Any of the three can be.
+  const meta = [
+    mistake.subject,
+    mistake.error_type && ERROR_TYPE_LABELS[mistake.error_type],
+    mistake.topic,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <Panel
       interactive
@@ -39,11 +48,7 @@ export function MistakeCard({ mistake }: { mistake: Mistake }) {
         {/* One line of metadata, quiet, so the question itself is what you read. */}
         <div className="flex flex-wrap items-center gap-2">
           {mistake.urgency && <UrgencyBadge urgency={mistake.urgency} />}
-          <span className="text-xs text-muted-foreground">
-            {SECTION_LABELS[mistake.section]}
-            {mistake.error_type && ` · ${ERROR_TYPE_LABELS[mistake.error_type]}`}
-            {mistake.topic && ` · ${mistake.topic}`}
-          </span>
+          {meta && <span className="text-xs text-muted-foreground">{meta}</span>}
           {status && (
             <span className="rounded-full border border-dashed px-2 py-0.5 text-[11px] text-muted-foreground">
               {status}

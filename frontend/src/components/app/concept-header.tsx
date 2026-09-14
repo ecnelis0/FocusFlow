@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, keys } from "@/lib/api";
-import { SECTION_LABELS } from "@/lib/labels";
 
 /** The concept itself, shown above its questions.
  *
@@ -30,9 +29,7 @@ export function ConceptHeader({ conceptId }: { conceptId: string }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold tracking-tight">{concept.title}</h2>
-            {concept.section && (
-              <Badge variant="outline">{SECTION_LABELS[concept.section]}</Badge>
-            )}
+            {concept.subject && <Badge variant="outline">{concept.subject}</Badge>}
           </div>
           <Link
             href={`/concepts/${concept.id}`}

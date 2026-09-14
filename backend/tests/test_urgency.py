@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models import Mistake, ReviewEvent
-from tests.conftest import MATH_MISTAKE, VERBAL_MISTAKE
+from tests.conftest import BIOLOGY_MISTAKE, MATH_MISTAKE
 
 
 async def _backdate(session_factory, mistake_id: str, delta: timedelta) -> None:
@@ -38,15 +38,15 @@ async def test_the_analyzer_assigns_an_urgency(client):
 async def test_a_concept_gap_is_fundamental_but_a_slip_is_not(client):
     """The stub's rule, and the shape the real prompt asks Claude for: judge the gap."""
     slip = (await client.post("/mistakes", json=MATH_MISTAKE)).json()["id"]
-    gap = (await client.post("/mistakes", json=VERBAL_MISTAKE)).json()["id"]
+    gap = (await client.post("/mistakes", json=BIOLOGY_MISTAKE)).json()["id"]
 
     slip_body = (await client.get(f"/mistakes/{slip}")).json()
     gap_body = (await client.get(f"/mistakes/{gap}")).json()
 
     assert slip_body["error_type"] == "careless_arithmetic"
     assert slip_body["urgency"] == "important"
-    assert gap_body["error_type"] == "evidence_misread"
-    assert gap_body["urgency"] == "very_important"
+    assert gap_body["error_type"] == "concept_gap"
+    assert gap_body["urgency"] == "fundamental"
 
 
 async def test_urgency_is_editable_like_everything_else(client):
@@ -72,29 +72,30 @@ async def test_urgency_is_a_closed_vocabulary(client, bad):
 
 async def test_the_bank_filters_by_urgency(client):
     first = (await client.post("/mistakes", json=MATH_MISTAKE)).json()["id"]
-    await client.post("/mistakes", json=VERBAL_MISTAKE)
-    await _set_urgency(client, first, "fundamental")
+    await client.post("/mistakes", json=BIOLOGY_MISTAKE)
+    # The stub rates the biology miss fundamental, so this must be a different level.
+    await _set_urgency(client, first, "very_important")
 
-    found = (await client.get("/mistakes", params={"urgency": "fundamental"})).json()
+    found = (await client.get("/mistakes", params={"urgency": "very_important"})).json()
 
     assert [m["id"] for m in found] == [first]
 
 
 async def test_stats_counts_the_urgencies(client):
     first = (await client.post("/mistakes", json=MATH_MISTAKE)).json()["id"]
-    await client.post("/mistakes", json=VERBAL_MISTAKE)
-    await _set_urgency(client, first, "fundamental")
+    await client.post("/mistakes", json=BIOLOGY_MISTAKE)
+    await _set_urgency(client, first, "very_important")
 
     stats = (await client.get("/stats")).json()
 
-    assert {"key": "fundamental", "count": 1} in stats["by_urgency"]
+    assert {"key": "very_important", "count": 1} in stats["by_urgency"]
     assert sum(s["count"] for s in stats["by_urgency"]) == 2
 
 
 async def test_the_review_queue_puts_the_most_urgent_question_first(client, session_factory):
     """Both are due; the one that matters more should be the one on screen."""
     older = (await client.post("/mistakes", json=MATH_MISTAKE)).json()["id"]
-    newer = (await client.post("/mistakes", json=VERBAL_MISTAKE)).json()["id"]
+    newer = (await client.post("/mistakes", json=BIOLOGY_MISTAKE)).json()["id"]
 
     # The *older* question is the less urgent one, so date order and urgency order
     # disagree - which is the only case that can tell the two apart.
@@ -112,7 +113,7 @@ async def test_the_review_queue_puts_the_most_urgent_question_first(client, sess
 async def test_a_question_with_no_urgency_yet_sorts_last_not_in_the_middle(client, session_factory):
     rated = (await client.post("/mistakes", json=MATH_MISTAKE)).json()["id"]
     unrated = (
-        await client.post("/mistakes", params={"analyze": "false"}, json=VERBAL_MISTAKE)
+        await client.post("/mistakes", params={"analyze": "false"}, json=BIOLOGY_MISTAKE)
     ).json()["id"]
 
     await _set_urgency(client, rated, "important")

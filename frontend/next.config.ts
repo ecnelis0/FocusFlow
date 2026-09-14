@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Traced server bundle for the container: `docker build` copies .next/standalone
+  // and runs `node server.js`, instead of shipping the whole node_modules tree.
+  // Additive - `next dev`, `next start` and the e2e run are unaffected.
+  output: "standalone",
   // Next blocks dev resources (including the HMR socket) for any host it was not
   // started on. Reaching the dev server by IP without this leaves the page served
   // but never hydrated - it renders the loading skeleton forever and issues no

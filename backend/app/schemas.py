@@ -6,11 +6,24 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import Difficulty, ErrorType, ReviewOutcome, Section, Urgency
+from .models import Difficulty, ErrorType, ReviewOutcome, Urgency
+
+
+def tidy_subject(value: str | None) -> str | None:
+    """Trim a free-text subject; a blank one means "no subject", not an empty string.
+
+    "  Biology " and "Biology" being two subjects would split every count and every
+    filter in half, and an empty string would show up as a nameless group.
+    """
+    if value is None:
+        return None
+    tidy = " ".join(value.split())
+    return tidy or None
 
 
 class MistakeCreate(BaseModel):
-    section: Section
+    # Free text: "Biology", "Calculus", "Spanish". Optional, at most 80 characters.
+    subject: str | None = Field(default=None, max_length=80)
     # Optional: say how badly this needs revisiting while you still remember. Left
     # unset, the analyzer decides.
     urgency: Urgency | None = None
@@ -38,6 +51,11 @@ class MistakeCreate(BaseModel):
             if tidy and tidy.casefold() not in seen:
                 seen[tidy.casefold()] = tidy
         return list(seen.values())
+
+    @field_validator("subject")
+    @classmethod
+    def _tidy_subject(cls, value: str | None) -> str | None:
+        return tidy_subject(value)
 
     @field_validator("question_text", "your_answer", "correct_answer")
     @classmethod
@@ -70,7 +88,7 @@ class MistakeUpdate(BaseModel):
     field without having to round-trip the rest.
     """
 
-    section: Section | None = None
+    subject: str | None = Field(default=None, max_length=80)
     source: str | None = Field(default=None, max_length=200)
     question_text: str | None = None
     choices: list[str] | None = None
@@ -100,6 +118,11 @@ class MistakeUpdate(BaseModel):
                 seen[tidy.casefold()] = tidy
         return list(seen.values())
 
+    @field_validator("subject")
+    @classmethod
+    def _tidy_subject(cls, value: str | None) -> str | None:
+        return tidy_subject(value)
+
     @field_validator("question_text", "your_answer", "correct_answer")
     @classmethod
     def _not_blanked(cls, value: str | None) -> str | None:
@@ -126,7 +149,7 @@ class ConceptSummary(BaseModel):
 class ConceptCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     body: str | None = None
-    section: Section | None = None
+    subject: str | None = Field(default=None, max_length=80)
 
     @field_validator("title")
     @classmethod
@@ -136,11 +159,16 @@ class ConceptCreate(BaseModel):
             raise ValueError("must not be blank")
         return stripped
 
+    @field_validator("subject")
+    @classmethod
+    def _tidy_subject(cls, value: str | None) -> str | None:
+        return tidy_subject(value)
+
 
 class ConceptUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     body: str | None = None
-    section: Section | None = None
+    subject: str | None = Field(default=None, max_length=80)
 
     @field_validator("title")
     @classmethod
@@ -152,6 +180,11 @@ class ConceptUpdate(BaseModel):
             raise ValueError("must not be blank")
         return stripped
 
+    @field_validator("subject")
+    @classmethod
+    def _tidy_subject(cls, value: str | None) -> str | None:
+        return tidy_subject(value)
+
 
 class ConceptRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -161,7 +194,7 @@ class ConceptRead(BaseModel):
     updated_at: datetime | None
     title: str
     body: str | None
-    section: Section | None
+    subject: str | None
     question_count: int = 0
     images: list[ImageRead] = []
 
@@ -200,7 +233,7 @@ class MistakeRead(BaseModel):
 
     id: str
     created_at: datetime
-    section: Section
+    subject: str | None
     source: str | None
     question_text: str
     choices: list[str] | None
@@ -253,15 +286,31 @@ class ReviewCompleteResult(BaseModel):
     next_due_at: datetime | None
 
 
+class ReviewAnswer(BaseModel):
+    """What the student typed or picked. The server decides if it is right."""
+
+    answer: str = Field(min_length=1)
+
+
+class ReviewAnswerResult(ReviewCompleteResult):
+    correct: bool
+    your_answer: str
+    correct_answer: str
+
+
 class SlotCount(BaseModel):
     key: str
     count: int
 
 
 class TopicCount(BaseModel):
-    """A topic always belongs to a section, so it is never reported without one."""
+    """A topic reported with the subject it was logged under.
 
-    section: Section
+    The subject is free text and optional, so it can be None: the topics of
+    questions logged with no subject are grouped together under it.
+    """
+
+    subject: str | None
     topic: str
     count: int
 
@@ -276,7 +325,8 @@ class Stats(BaseModel):
     by_error_type: list[SlotCount]
     by_urgency: list[SlotCount]
     by_concept: list[SlotCount]
-    by_section: list[SlotCount]
+    # Only questions that carry a subject; the rest are counted in total_mistakes.
+    by_subject: list[SlotCount]
     topics: list[TopicCount]
 
 

@@ -47,9 +47,11 @@ def session_factory(app_env):
     return app_env.get_sessionmaker()
 
 
+# Two subjects, so a filter has something to separate. Subjects are free text; the
+# capitalisation here is the one the bank should hand back.
 MATH_MISTAKE = {
-    "section": "math",
-    "source": "Bluebook Practice Test 4",
+    "subject": "Math",
+    "source": "Practice Test 4",
     "question_text": "If 3x + 7 = 22, what is the value of x?",
     "choices": ["3", "5", "7", "15"],
     "your_answer": "7",
@@ -57,10 +59,10 @@ MATH_MISTAKE = {
     "student_note": "I subtracted wrong under time pressure.",
 }
 
-VERBAL_MISTAKE = {
-    "section": "reading_writing",
-    "question_text": "Which choice provides the best evidence for the previous answer?",
-    "choices": ["Lines 4-6", "Lines 12-14", "Lines 20-22", "Lines 31-33"],
-    "your_answer": "Lines 4-6",
-    "correct_answer": "Lines 20-22",
+BIOLOGY_MISTAKE = {
+    "subject": "Biology",
+    "question_text": "Which organelle is the site of cellular respiration?",
+    "choices": ["Ribosome", "Mitochondrion", "Chloroplast", "Nucleus"],
+    "your_answer": "Chloroplast",
+    "correct_answer": "Mitochondrion",
 }

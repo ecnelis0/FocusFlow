@@ -1,6 +1,6 @@
-# Mistake Bank — working notes
+# FocusFlow — working notes
 
-An SAT wrong-answer journal: log a miss, an AI analyses and files it, and it returns on
+A wrong-answer journal for any subject: log a miss, an AI analyses and files it, and it returns on
 a fixed 1h / 24h / 72h / 1w / 1mo ladder. See `README.md` for how to run it.
 
 ## Rules that come from real bugs in this repo
@@ -28,7 +28,13 @@ a fixed 1h / 24h / 72h / 1w / 1mo ladder. See `README.md` for how to run it.
   orders the due queue. The one file to read first.
 - `backend/app/analysis/` — the analyzer contract (`analyze`, `interpret`, `summarise`),
   the offline stub, the Claude adapter. Adding a provider is one new file plus a line in
-  `__init__.py`.
+  `__init__.py`. `extract.py` is the same shape for scanned notes → concepts.
+- `backend/app/routers/capture.py` — `POST /capture`. Sniffs the kind from the bytes,
+  transcribes audio via `transcribe.py` (Whisper, local, optional extra), then files the
+  extractor's concepts, merging into an existing one when the model names it.
+- **A row serialised before its commit needs its defaults set by hand.** `Concept.id`
+  and `ConceptImage.id` are INSERT-time defaults; building a `ConceptRead` from a new row
+  before `commit()` fails validation with `id=None`. `capture.py` passes `id=new_id()`.
 - `backend/app/images.py` — upload validation. Every rule there is "do not trust the
   upload": the filename is generated, the type comes from decoding the pixels, the size
   is capped while reading.

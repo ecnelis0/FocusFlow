@@ -42,9 +42,6 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Your mistakes</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Every miss comes back at 1 hour, 24 hours, 72 hours, 1 week and 1 month.
-          </p>
         </div>
         <Link href="/log" className={buttonVariants({ variant: "secondary" })}>
           Log a miss

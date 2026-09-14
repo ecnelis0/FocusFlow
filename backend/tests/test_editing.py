@@ -44,9 +44,9 @@ async def test_any_field_of_the_question_can_be_edited(client):
                 "choices": ["3", "5"],
                 "your_answer": "3",
                 "correct_answer": "5",
-                "source": "Bluebook Practice Test 4, Q18",
+                "source": "Practice Test 4, Q18",
                 "student_note": "Actually I misread the sign.",
-                "section": "reading_writing",
+                "subject": "Algebra",
             },
         )
     ).json()
@@ -54,8 +54,16 @@ async def test_any_field_of_the_question_can_be_edited(client):
     assert updated["question_text"] == "If 3x + 7 = 22, solve for x."
     assert updated["choices"] == ["3", "5"]
     assert updated["your_answer"] == "3"
-    assert updated["source"] == "Bluebook Practice Test 4, Q18"
-    assert updated["section"] == "reading_writing"
+    assert updated["source"] == "Practice Test 4, Q18"
+    assert updated["subject"] == "Algebra"
+
+
+async def test_a_subject_can_be_cleared_by_editing(client):
+    mistake_id = (await client.post("/mistakes", json=MATH_MISTAKE)).json()["id"]
+
+    updated = (await client.patch(f"/mistakes/{mistake_id}", json={"subject": ""})).json()
+
+    assert updated["subject"] is None
 
 
 async def test_editing_one_field_leaves_the_others_alone(client):

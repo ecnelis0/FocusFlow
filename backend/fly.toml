@@ -1,0 +1,65 @@
+# The API on Fly. `fly deploy` from backend/ builds backend/Dockerfile.
+#
+# Nothing secret lives here - this file is committed. The two secrets go in with
+# `fly secrets set`, listed under [env] below as comments so the list is in one
+# place. See docs/DEPLOY.md for the full sequence.
+
+app = "mistake-bank-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # The database file and the uploads live on the volume, not the machine's
+  # ephemeral root: a redeploy replaces the filesystem and would take the bank
+  # with it.
+  DATABASE_URL = "sqlite+aiosqlite:////data/mistake_bank.db"
+  UPLOAD_ROOT = "/data/uploads"
+
+  # The API-key adapter, not `agent`: the agent provider drives the `claude` CLI,
+  # whose login lives in a keychain on the machine that ran `claude auth login`.
+  # A Fly machine has no such login and never will.
+  AI_PROVIDER = "claude"
+  ANTHROPIC_MODEL = "claude-opus-5"
+
+  # Whisper needs ~1GB of RAM to load `base`. On anything smaller than the
+  # 2GB machine below, set TRANSCRIBER = "stub" instead and audio uploads degrade
+  # to a message rather than an OOM kill.
+  TRANSCRIBER = "whisper"
+  WHISPER_MODEL = "base"
+
+  # Secrets, set with `fly secrets set` - never as [env] values:
+  #   ANTHROPIC_API_KEY   required by AI_PROVIDER=claude
+  #   CORS_ORIGINS        the Vercel URL, e.g. https://mistake-bank.vercel.app
+  #                       An origin not on that list gets a 400 on preflight and
+  #                       the deployed front end is a blank page.
+
+[[mounts]]
+  source = "data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # SQLite on one volume: exactly one machine may write to it, so no autoscaling
+  # and no stopping (the ladder is read on every page, and a cold start is slow
+  # with a Whisper model in the image).
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.http_options.response]
+    pristine = true
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  # 1GB will not hold the Whisper model. 2GB is the smallest that transcribes.
+  size = "shared-cpu-2x"
+  memory = "2gb"

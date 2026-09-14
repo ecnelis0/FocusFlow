@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field
 from ..analysis import get_analyzer
 from ..config import get_settings
 from ..deps import SessionDep, UserDep
-from ..query import BankQuery, describe, digest, run_query, vocabulary
+from ..query import BankQuery, bank_context, describe, digest, run_query, vocabulary
+from ..readiness import analyzer_ready
 from ..schemas import MistakeRead
 
 router = APIRouter(prefix="/ask", tags=["ask"])
@@ -44,9 +45,12 @@ async def ask(body: Ask, session: SessionDep, user_id: UserDep) -> Answer:
     filter, the database runs it, and only then does the model get to speak - about
     rows that exist. It never answers from a recollection of the bank.
     """
+    # One definition of "ready", shared with /health: the agent provider has no key,
+    # it has a login. Answering with the panel telling them the key is missing was
+    # wrong twice over.
     settings = get_settings()
     provider = settings.ai_provider.lower()
-    ready = provider == "stub" or (provider == "claude" and bool(settings.anthropic_api_key))
+    ready = analyzer_ready(settings)
 
     analyzer = get_analyzer()
     today = datetime.now(UTC).date()
@@ -71,8 +75,11 @@ async def ask(body: Ask, session: SessionDep, user_id: UserDep) -> Answer:
 
     mistakes = await run_query(session, user_id, query)
 
+    # The whole bank goes along as background, so the answer can reach beyond the
+    # rows the filter matched - concepts, notes, review history, the lot.
+    context = await bank_context(session, user_id)
     try:
-        answer = await analyzer.summarise(body.question, digest(mistakes))
+        answer = await analyzer.summarise(body.question, digest(mistakes), context)
         error = None
     except Exception as exc:
         # The rows are the valuable part; losing the prose is survivable.

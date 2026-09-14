@@ -12,27 +12,39 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, keys } from "@/lib/api";
-import { SECTION_LABELS } from "@/lib/labels";
+import type { Concept } from "@/lib/types";
 
-/** Math and English are kept apart because a concept belongs to one or the other,
- *  and mixing them makes the list something to scan rather than something to open.
- *  A concept that fits neither still needs a home, so it gets its own group. */
-const GROUPS = [
-  { key: "math" as const, label: SECTION_LABELS.math },
-  { key: "reading_writing" as const, label: SECTION_LABELS.reading_writing },
-  { key: "unfiled" as const, label: "Neither section" },
-];
+/** Concepts are grouped by subject because a concept belongs to one, and mixing
+ *  them makes the list something to scan rather than something to open. A concept
+ *  with no subject still needs a home, so it gets a group of its own, last. */
+const NO_SUBJECT = "No subject";
+
+function groupBySubject(
+  concepts: Concept[],
+): { label: string; concepts: Concept[] }[] {
+  const bySubject = new Map<string, Concept[]>();
+  const unfiled: Concept[] = [];
+  for (const concept of concepts) {
+    if (concept.subject === null) unfiled.push(concept);
+    else
+      bySubject.set(concept.subject, [
+        ...(bySubject.get(concept.subject) ?? []),
+        concept,
+      ]);
+  }
+  const groups = [...bySubject.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, inGroup]) => ({ label, concepts: inGroup }));
+  if (unfiled.length > 0) groups.push({ label: NO_SUBJECT, concepts: unfiled });
+  return groups;
+}
 
 export default function ConceptsPage() {
   const [writing, setWriting] = useState(false);
-  // Every group open to begin with. A collapsed list of two things is worse than no
-  // grouping, and leaving "Neither section" shut hides a concept you just wrote
-  // simply because you did not pick a section for it.
-  const [expanded, setExpanded] = useState<string[]>([
-    "math",
-    "reading_writing",
-    "unfiled",
-  ]);
+  // Every group open to begin with, so the state is the ones that were shut. A
+  // collapsed list of two things is worse than no grouping, and a group that
+  // starts shut hides a concept you just wrote.
+  const [collapsed, setCollapsed] = useState<string[]>([]);
   const { data, isPending, isError, error } = useQuery({
     queryKey: keys.concepts(),
     queryFn: api.listConcepts,
@@ -42,9 +54,11 @@ export default function ConceptsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Concepts"
-        lede="The thing behind a family of misses — the rule you keep forgetting, not the question you got wrong."
         actions={
-          <Button variant={writing ? "ghost" : "default"} onClick={() => setWriting(!writing)}>
+          <Button
+            variant={writing ? "ghost" : "default"}
+            onClick={() => setWriting(!writing)}
+          >
             {writing ? "Cancel" : "Write a concept"}
           </Button>
         }
@@ -67,31 +81,26 @@ export default function ConceptsPage() {
         <Unreachable error={error as Error} />
       ) : data && data.length > 0 ? (
         <div className="space-y-3">
-          {GROUPS.map((group) => {
-            const inGroup = data.filter((concept) =>
-              group.key === "unfiled"
-                ? concept.section === null
-                : concept.section === group.key,
-            );
-            if (inGroup.length === 0) return null;
-            const open = expanded.includes(group.key);
+          {groupBySubject(data).map((group) => {
+            const inGroup = group.concepts;
+            const open = !collapsed.includes(group.label);
 
             return (
-              <section key={group.key} className="rounded-xl border">
+              <section key={group.label} className="rounded-xl border">
                 <button
                   type="button"
                   aria-expanded={open}
                   onClick={() =>
-                    setExpanded(
+                    setCollapsed(
                       open
-                        ? expanded.filter((value) => value !== group.key)
-                        : [...expanded, group.key],
+                        ? [...collapsed, group.label]
+                        : collapsed.filter((value) => value !== group.label),
                     )
                   }
                   className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50"
                 >
                   {/* Decoration: aria-expanded already says open or shut, and a
-                      glyph in the accessible name makes the button "▾ Math". */}
+                      glyph in the accessible name makes the button "▾ Biology". */}
                   <span aria-hidden className="text-xs text-muted-foreground">
                     {open ? "▾" : "▸"}
                   </span>
@@ -135,7 +144,10 @@ export default function ConceptsPage() {
           <Empty
             title="No concepts yet."
             body="A concept is the thing behind a family of misses — the rule you keep forgetting, not the question you got wrong. Write the first one."
-            onAction={{ label: "Write your first concept", onClick: () => setWriting(true) }}
+            onAction={{
+              label: "Write your first concept",
+              onClick: () => setWriting(true),
+            }}
           />
         )
       )}

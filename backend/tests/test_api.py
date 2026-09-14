@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models import Mistake, ReviewEvent, ReviewOutcome
-from tests.conftest import MATH_MISTAKE, VERBAL_MISTAKE
+from tests.conftest import BIOLOGY_MISTAKE, MATH_MISTAKE
 
 
 async def _backdate(session_factory, mistake_id: str, delta: timedelta) -> None:
@@ -152,13 +152,15 @@ async def test_another_student_cannot_complete_your_review(client, session_facto
 
 async def test_the_bank_filters_by_the_slots_the_ai_assigned(client):
     await client.post("/mistakes", json=MATH_MISTAKE)
-    await client.post("/mistakes", json=VERBAL_MISTAKE)
+    await client.post("/mistakes", json=BIOLOGY_MISTAKE)
 
     everything = (await client.get("/mistakes")).json()
     assert len(everything) == 2
 
-    math_only = (await client.get("/mistakes", params={"section": "math"})).json()
-    assert [m["section"] for m in math_only] == ["math"]
+    math_only = (await client.get("/mistakes", params={"subject": "Math"})).json()
+    assert [m["subject"] for m in math_only] == ["Math"]
+    # Free text, so the filter cannot demand the student's exact capitalisation.
+    assert (await client.get("/mistakes", params={"subject": "math"})).json() == math_only
 
     slot = everything[0]["error_type"]
     by_slot = (await client.get("/mistakes", params={"error_type": slot})).json()
@@ -170,7 +172,7 @@ async def test_the_bank_filters_by_the_slots_the_ai_assigned(client):
 
 async def test_stats_counts_the_slots(client, session_factory):
     mistake_id = (await client.post("/mistakes", json=MATH_MISTAKE)).json()["id"]
-    await client.post("/mistakes", json=VERBAL_MISTAKE)
+    await client.post("/mistakes", json=BIOLOGY_MISTAKE)
     await _backdate(session_factory, mistake_id, timedelta(hours=2))
 
     stats = (await client.get("/stats")).json()
@@ -179,7 +181,7 @@ async def test_stats_counts_the_slots(client, session_factory):
     assert stats["due_now"] == 1
     assert stats["reviews_completed"] == 0
     assert sum(s["count"] for s in stats["by_error_type"]) == 2
-    assert {s["key"] for s in stats["by_section"]} == {"math", "reading_writing"}
+    assert {s["key"] for s in stats["by_subject"]} == {"Math", "Biology"}
 
 
 async def test_superseded_rungs_are_not_counted_as_reviews_the_student_did(client, session_factory):
@@ -206,11 +208,28 @@ async def test_deleting_a_mistake_takes_its_ladder_with_it(client):
     [
         {**MATH_MISTAKE, "question_text": "   "},
         {**MATH_MISTAKE, "your_answer": ""},
-        {**MATH_MISTAKE, "section": "essay"},
+        {**MATH_MISTAKE, "subject": "x" * 81},
     ],
 )
 async def test_a_mistake_without_the_essentials_is_rejected(client, payload):
     assert (await client.post("/mistakes", json=payload)).status_code == 422
+
+
+@pytest.mark.parametrize("subject", [None, "", "   "])
+async def test_a_subject_is_optional_and_a_blank_one_means_none(client, subject):
+    """Any subject at all, or none: the bank is not tied to one course."""
+    payload = {**MATH_MISTAKE, "subject": subject}
+
+    response = await client.post("/mistakes", json=payload)
+
+    assert response.status_code == 201, response.text
+    assert response.json()["subject"] is None
+
+
+async def test_a_subject_is_trimmed(client):
+    body = (await client.post("/mistakes", json={**MATH_MISTAKE, "subject": "  Spanish  "})).json()
+
+    assert body["subject"] == "Spanish"
 
 
 async def test_timestamps_survive_the_round_trip_as_utc(client, session_factory):

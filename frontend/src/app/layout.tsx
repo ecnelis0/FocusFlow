@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Geist, Geist_Mono } from "next/font/google";
+import { Roboto, Roboto_Mono } from "next/font/google";
 
 import { Assistant } from "@/components/app/assistant";
 import { Nav } from "@/components/app/nav";
@@ -9,32 +9,33 @@ import { Toaster } from "@/components/ui/sonner";
 
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
-// A display serif for headings only. The bank is a study journal, and an editorial
-// voice suits it better than the same grotesque at three sizes.
-const fraunces = Fraunces({
-  variable: "--font-display",
+// One face for everything, headings included: Roboto for text, Roboto Mono for
+// answers and codes. `weight` is pinned because Roboto on Google Fonts is not
+// served as a variable font.
+const roboto = Roboto({
+  variable: "--font-roboto",
   subsets: ["latin"],
-  // No `axes` here: naming them requires the variable axis to stay open, and
-  // pinning explicit weights alongside them fails the build with "Axes can only be
-  // defined for variable fonts".
-  weight: ["400", "600"],
+  weight: ["400", "500", "700"],
 });
+const robotoMono = Roboto_Mono({ variable: "--font-roboto-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Mistake Bank",
-  description: "Every SAT question you got wrong, analysed and scheduled back.",
+  title: "FocusFlow",
+  description: "Every question you got wrong, in any subject, analysed and scheduled back.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} antialiased`}>
+      <body className={`${roboto.variable} ${robotoMono.variable} antialiased`}>
         <Providers>
           <SidePanelProvider>
             <Nav />
-            <MainArea>{children}</MainArea>
+            {/* Room for the fixed sidebar on wide screens; the top bar on narrow ones
+                sits in normal flow above the content. */}
+            <div className="lg:pl-56">
+              <MainArea>{children}</MainArea>
+            </div>
             <Assistant />
           </SidePanelProvider>
           <Toaster position="top-center" />

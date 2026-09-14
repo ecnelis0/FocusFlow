@@ -11,8 +11,9 @@ from datetime import UTC, date, datetime, time
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import String, and_, or_, select
+from sqlalchemy import String, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from .models import (
     Concept,
@@ -20,7 +21,6 @@ from .models import (
     Mistake,
     ReviewEvent,
     ReviewOutcome,
-    Section,
     Urgency,
     mistake_options,
     utcnow,
@@ -42,6 +42,11 @@ class Vocabulary(BaseModel):
         default_factory=list,
         description="The student's own labels, e.g. 'by mistake'. Matched exactly, ignoring case.",
     )
+    subjects: list[str] = Field(
+        default_factory=list,
+        description="The subjects the student has logged under, e.g. 'Biology'. Free "
+        "text, so these are the only spellings that exist.",
+    )
     topics: list[str] = Field(default_factory=list)
     concepts: list[str] = Field(default_factory=list)
     sources: list[str] = Field(default_factory=list)
@@ -52,6 +57,7 @@ class Vocabulary(BaseModel):
 
         return "\n".join(
             [
+                block("Subjects in this bank", self.subjects),
                 block("Topics in this bank", self.topics),
                 block("Tags the student uses", self.tags),
                 block("Concepts the student has written", self.concepts),
@@ -64,8 +70,8 @@ class BankQuery(BaseModel):
     """What the student asked for, in terms the database understands.
 
     Every list is OR within itself and AND across fields: `urgency=[fundamental,
-    very_important], section=[reading_writing]` means "fundamental or very important,
-    *and* Reading & Writing".
+    very_important], subjects=[Biology]` means "fundamental or very important, *and*
+    Biology".
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -87,7 +93,11 @@ class BankQuery(BaseModel):
     )
     urgency: list[Urgency] = Field(default_factory=list)
     error_type: list[ErrorType] = Field(default_factory=list)
-    section: list[Section] = Field(default_factory=list)
+    subjects: list[str] = Field(
+        default_factory=list,
+        description="Subjects, copied exactly from the subjects you were given, e.g. "
+        "'Biology'. Matched as whole strings, ignoring case.",
+    )
     topics: list[str] = Field(
         default_factory=list,
         description="Topic words to match, e.g. 'circles'. Matched as substrings.",
@@ -114,7 +124,7 @@ class BankQuery(BaseModel):
 
 
 # What a text search looks at. The question alone is not enough: people search for
-# where a question came from ("Bluebook"), for an answer ("36"), or for the topic.
+# where a question came from ("Textbook"), for an answer ("36"), or for the topic.
 SEARCHABLE = (
     Mistake.question_text,
     Mistake.source,
@@ -155,8 +165,12 @@ def build_statement(user_id: str, query: BankQuery):
         stmt = stmt.where(Mistake.urgency.in_([u.value for u in query.urgency]))
     if query.error_type:
         stmt = stmt.where(Mistake.error_type.in_([e.value for e in query.error_type]))
-    if query.section:
-        stmt = stmt.where(Mistake.section.in_([s.value for s in query.section]))
+    if query.subjects:
+        # Whole strings, not substrings: "Math" must not pull in "Mathematical logic".
+        # Case-insensitive because the model and the student both type these freely.
+        stmt = stmt.where(
+            func.lower(Mistake.subject).in_([subject.lower() for subject in query.subjects])
+        )
     if query.tags:
         # tags is a JSON array, so this is a substring match on the serialised list.
         # Quoted to stop "guessed" matching a tag that merely contains it.
@@ -215,13 +229,8 @@ def describe(query: BankQuery) -> str:
         parts.append(f"under {count} concept{'' if count == 1 else 's'}")
     if query.urgency:
         parts.append(" or ".join(u.value.replace("_", " ") for u in query.urgency))
-    if query.section:
-        parts.append(
-            " or ".join(
-                "Reading & Writing" if s is Section.reading_writing else "Math"
-                for s in query.section
-            )
-        )
+    if query.subjects:
+        parts.append("in " + " or ".join(query.subjects))
     if query.error_type:
         parts.append(" or ".join(e.value.replace("_", " ") for e in query.error_type))
     if query.tags:
@@ -248,6 +257,11 @@ def describe(query: BankQuery) -> str:
 
 async def vocabulary(session: AsyncSession, user_id: str) -> Vocabulary:
     """The distinct values in this student's bank, for the model to choose from."""
+    subjects = await session.scalars(
+        select(Mistake.subject)
+        .where(Mistake.user_id == user_id, Mistake.subject.is_not(None))
+        .distinct()
+    )
     topics = await session.scalars(
         select(Mistake.topic)
         .where(Mistake.user_id == user_id, Mistake.topic.is_not(None))
@@ -266,6 +280,7 @@ async def vocabulary(session: AsyncSession, user_id: str) -> Vocabulary:
     )
     tags = sorted({tag for row in tag_rows for tag in (row or [])})
     return Vocabulary(
+        subjects=sorted(subjects),
         topics=sorted(topics),
         concepts=sorted(concepts),
         sources=sorted(sources),
@@ -383,13 +398,80 @@ def overview(mistakes: list[Mistake]) -> str:
         f"By reason: {tally([m.error_type for m in mistakes if m.error_type])}",
         f"By urgency: {tally([m.urgency for m in mistakes if m.urgency])}",
         f"By topic: {tally([m.topic for m in mistakes if m.topic])}",
-        f"By section: {tally([m.section for m in mistakes])}",
+        f"By subject: {tally([m.subject or 'no subject' for m in mistakes])}",
     ]
     concepts = [concept.title for m in mistakes for concept in m.concepts]
     if concepts:
         lines.append(f"By concept: {tally(concepts)}")
     lines.append("")
     lines.append(recurring(mistakes))
+    return "\n".join(lines)
+
+
+async def bank_context(session: AsyncSession, user_id: str, limit: int = 300) -> str:
+    """Everything in the bank, compactly, so the assistant answers from the whole
+    picture and not only the rows a filter happened to match.
+
+    Concepts with what the student wrote about them, every question with its
+    slot, urgency, tags, concepts, takeaway and review record, and the totals.
+    Facts only - the counting is done here, not by the model.
+    """
+    concepts = list(
+        await session.scalars(
+            select(Concept)
+            .where(Concept.user_id == user_id)
+            .options(selectinload(Concept.mistakes))
+            .order_by(Concept.subject, Concept.title)
+        )
+    )
+    mistakes = list(
+        await session.scalars(
+            select(Mistake)
+            .where(Mistake.user_id == user_id)
+            .options(*mistake_options())
+            .order_by(Mistake.created_at.desc())
+            .limit(limit)
+        )
+    )
+    now = utcnow()
+    due = sum(1 for m in mistakes for r in m.reviews if r.completed_at is None and r.due_at <= now)
+
+    lines = [
+        f"BANK TOTALS: {len(mistakes)} questions, {len(concepts)} concepts, {due} reviews due now.",
+        "",
+        "CONCEPTS (title | subject | questions filed | the student's own notes):",
+    ]
+    for c in concepts:
+        note = " ".join((c.body or "").split())[:240]
+        lines.append(f"- {c.title} | {c.subject or '-'} | {len(c.mistakes)} | {note or '-'}")
+    if not concepts:
+        lines.append("- (none yet)")
+
+    lines += ["", "QUESTIONS, newest first:"]
+    for m in mistakes:
+        history = [
+            f"{r.interval_label}:{r.outcome}"
+            for r in sorted(m.reviews, key=lambda r: (r.cycle, r.step_index))
+            if r.outcome in (ReviewOutcome.correct, ReviewOutcome.wrong, ReviewOutcome.skipped)
+        ]
+        open_rungs = [r for r in m.reviews if r.completed_at is None]
+        next_due = min((r.due_at for r in open_rungs), default=None)
+        lines.append(
+            f"- id={m.id} logged={m.created_at.date()} subject={m.subject or '-'} "
+            f"topic={m.topic or '-'} reason={m.error_type or '-'} urgency={m.urgency or '-'} "
+            f"tags={','.join(m.tags or []) or '-'} "
+            f"concepts={'; '.join(c.title for c in m.concepts) or '-'} "
+            f"missed_again={times_missed_again(m)} "
+            f"reviews={' '.join(history) or 'none yet'} "
+            f"next_due={next_due.date() if next_due else 'none'} "
+            f'q="{m.question_text[:100]}" you_put={m.your_answer!r} answer={m.correct_answer!r}'
+        )
+        if m.takeaway:
+            lines.append(f"    takeaway: {m.takeaway[:160]}")
+        if m.student_note:
+            lines.append(f"    student's note: {m.student_note[:160]}")
+    if not mistakes:
+        lines.append("- (none yet)")
     return "\n".join(lines)
 
 
@@ -403,7 +485,7 @@ def digest(mistakes: list[Mistake]) -> str:
         repeats = times_missed_again(mistake)
         concepts = ", ".join(concept.title for concept in mistake.concepts) or "-"
         lines.append(
-            f"{index}. [{mistake.urgency or 'unrated'}] [{mistake.section}] "
+            f"{index}. [{mistake.urgency or 'unrated'}] [{mistake.subject or 'no subject'}] "
             f"[{mistake.error_type or 'no slot'}] topic={mistake.topic or '-'} "
             f"concepts={concepts} logged={mistake.created_at.date()} "
             f"missed_again_on_review={repeats} "

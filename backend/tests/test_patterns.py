@@ -12,7 +12,7 @@ from datetime import timedelta
 from sqlalchemy import select
 
 from app.models import Mistake, ReviewEvent
-from tests.conftest import MATH_MISTAKE, VERBAL_MISTAKE
+from tests.conftest import BIOLOGY_MISTAKE, MATH_MISTAKE
 
 
 async def _log(client, payload, **overrides):
@@ -67,7 +67,7 @@ async def test_a_question_answered_correctly_is_not_a_pattern(client, session_fa
 async def test_the_topic_you_keep_missing_is_named(client, session_factory):
     """The student's own example: inverse trig, wrong again and again."""
     trig = await _log(client, MATH_MISTAKE, topic="inverse trig")
-    other = await _log(client, VERBAL_MISTAKE, topic="command of evidence")
+    other = await _log(client, BIOLOGY_MISTAKE, topic="command of evidence")
     await _miss_it_again(client, session_factory, trig, times=3)
     await _miss_it_again(client, session_factory, other, times=1)
 
@@ -91,7 +91,7 @@ async def test_breadth_and_repetition_are_both_reported(client, session_factory)
     An answer that names only one of them is not answering the question.
     """
     for _ in range(4):
-        await _log(client, VERBAL_MISTAKE, topic="command of evidence")
+        await _log(client, BIOLOGY_MISTAKE, topic="command of evidence")
     trig = await _log(client, MATH_MISTAKE, topic="inverse trig")
     await _miss_it_again(client, session_factory, trig, times=2)
 
@@ -114,7 +114,7 @@ async def test_the_students_own_example_different_questions_same_weakness(client
         "sin^-1(-1) is which angle?",
     ):
         await _log(client, {**MATH_MISTAKE, "question_text": question}, topic="inverse trig")
-    await _log(client, VERBAL_MISTAKE, topic="command of evidence")
+    await _log(client, BIOLOGY_MISTAKE, topic="command of evidence")
 
     body = (
         await client.post(
@@ -162,7 +162,7 @@ async def test_a_concept_you_keep_missing_is_named(client, session_factory):
 async def test_the_period_is_respected(client, session_factory):
     """ "in the past month" must exclude what happened before it."""
     recent = await _log(client, MATH_MISTAKE, topic="inverse trig")
-    old = await _log(client, VERBAL_MISTAKE, topic="command of evidence")
+    old = await _log(client, BIOLOGY_MISTAKE, topic="command of evidence")
     await _miss_it_again(client, session_factory, recent, times=2)
     await _miss_it_again(client, session_factory, old, times=2)
     await _age(session_factory, old, days=120)

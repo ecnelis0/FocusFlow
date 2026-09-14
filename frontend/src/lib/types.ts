@@ -1,7 +1,5 @@
 /** Mirrors `backend/app/schemas.py`. Keep the two in step. */
 
-export type Section = "reading_writing" | "math";
-
 export const ERROR_TYPES = [
   "careless_arithmetic",
   "misread_question",
@@ -10,9 +8,7 @@ export const ERROR_TYPES = [
   "algebra_slip",
   "unit_or_conversion",
   "trap_answer",
-  "evidence_misread",
   "vocabulary_gap",
-  "grammar_rule_gap",
   "time_pressure_guess",
   "other",
 ] as const;
@@ -54,7 +50,8 @@ export interface Concept extends ConceptSummary {
   created_at: string;
   updated_at: string | null;
   body: string | null;
-  section: Section | null;
+  /** Free text — "Biology", "Calculus" — or nothing. */
+  subject: string | null;
   question_count: number;
   images: MistakeImage[];
 }
@@ -66,7 +63,7 @@ export interface ConceptDetail extends Concept {
 export interface ConceptDraft {
   title: string;
   body?: string | null;
-  section?: Section | null;
+  subject?: string | null;
 }
 
 export interface MistakeImage {
@@ -83,7 +80,7 @@ export interface MistakeImage {
 export interface Mistake {
   id: string;
   created_at: string;
-  section: Section;
+  subject: string | null;
   source: string | null;
   question_text: string;
   choices: string[] | null;
@@ -123,13 +120,20 @@ export interface ReviewCompleteResult {
   next_due_at: string | null;
 }
 
+/** The server's verdict on an answer the student typed or picked. */
+export interface ReviewAnswerResult extends ReviewCompleteResult {
+  correct: boolean;
+  your_answer: string;
+  correct_answer: string;
+}
+
 export interface SlotCount {
   key: string;
   count: number;
 }
 
 export interface TopicCount {
-  section: Section;
+  subject: string | null;
   topic: string;
   count: number;
 }
@@ -142,7 +146,7 @@ export interface Stats {
   by_error_type: SlotCount[];
   by_urgency: SlotCount[];
   by_concept: SlotCount[];
-  by_section: SlotCount[];
+  by_subject: SlotCount[];
   topics: TopicCount[];
 }
 
@@ -150,7 +154,7 @@ export interface Stats {
 export type MistakeEdit = Partial<
   Pick<
     Mistake,
-    | "section"
+    | "subject"
     | "source"
     | "question_text"
     | "choices"
@@ -178,7 +182,7 @@ export interface BankQuery {
   tags: string[];
   urgency: Urgency[];
   error_type: ErrorType[];
-  section: Section[];
+  subjects: string[];
   topics: string[];
   text: string | null;
   logged_after: string | null;
@@ -201,7 +205,7 @@ export interface Answer {
 }
 
 export interface MistakeDraft {
-  section: Section;
+  subject?: string | null;
   urgency?: Urgency | null;
   concept_ids?: string[];
   tags?: string[];

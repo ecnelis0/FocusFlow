@@ -1,19 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const SECTION_LABEL = {
-  math: "Math",
-  reading_writing: "Reading & Writing",
-} as const;
-
-
-async function writeConcept(page: Page, title: string, section?: "math" | "reading_writing") {
+async function writeConcept(page: Page, title: string, subject?: string) {
   await page.goto("/concepts");
   await page.getByRole("button", { name: /Write (a|your first) concept/ }).first().click();
   await page.getByLabel("The concept").fill(title);
-  await page.getByRole("button", {
-    name: section ? SECTION_LABEL[section] : "Neither",
-    exact: true,
-  }).click();
+  if (subject) await page.getByLabel("Subject").fill(subject);
   await page.getByRole("button", { name: "Add concept" }).click();
   await expect(page.getByText(title)).toBeVisible();
 }
@@ -25,7 +16,7 @@ test("a question can be labelled and filed under a concept while logging", async
   const concept = `Isolate before dividing ${stamp}`;
   const question = `Labelled at log time ${stamp} [e2e]`;
 
-  await writeConcept(page, concept, "math");
+  await writeConcept(page, concept, "Algebra");
 
   await page.goto("/log");
   await page.getByLabel("The question").fill(question);
@@ -56,32 +47,32 @@ test("a question can be labelled and filed under a concept while logging", async
   });
 });
 
-test("concepts are grouped into Math and Reading & Writing", async ({ page }) => {
+test("concepts are grouped by subject", async ({ page }) => {
   const stamp = Date.now() % 100000;
-  const mathConcept = `Math concept ${stamp}`;
-  const englishConcept = `English concept ${stamp}`;
+  const algebraConcept = `Algebra concept ${stamp}`;
+  const biologyConcept = `Biology concept ${stamp}`;
 
-  await writeConcept(page, mathConcept, "math");
-  await writeConcept(page, englishConcept, "reading_writing");
+  await writeConcept(page, algebraConcept, "Algebra");
+  await writeConcept(page, biologyConcept, "Biology");
 
   await page.goto("/concepts");
 
-  const math = page.getByRole("button", { name: /^Math/ });
-  const english = page.getByRole("button", { name: /^Reading & Writing/ });
-  await expect(math).toBeVisible();
-  await expect(english).toBeVisible();
+  const algebra = page.getByRole("button", { name: /^Algebra/ });
+  const biology = page.getByRole("button", { name: /^Biology/ });
+  await expect(algebra).toBeVisible();
+  await expect(biology).toBeVisible();
 
   // Open by default, each holding its own concepts and not the other's.
-  await expect(page.getByRole("link", { name: new RegExp(mathConcept) })).toBeVisible();
-  await expect(page.getByRole("link", { name: new RegExp(englishConcept) })).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(algebraConcept) })).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(biologyConcept) })).toBeVisible();
 
   // Collapsing one hides only its own.
-  await math.click();
-  await expect(page.getByRole("link", { name: new RegExp(mathConcept) })).toBeHidden();
-  await expect(page.getByRole("link", { name: new RegExp(englishConcept) })).toBeVisible();
+  await algebra.click();
+  await expect(page.getByRole("link", { name: new RegExp(algebraConcept) })).toBeHidden();
+  await expect(page.getByRole("link", { name: new RegExp(biologyConcept) })).toBeVisible();
 
-  await math.click();
-  await expect(page.getByRole("link", { name: new RegExp(mathConcept) })).toBeVisible();
+  await algebra.click();
+  await expect(page.getByRole("link", { name: new RegExp(algebraConcept) })).toBeVisible();
 });
 
 
@@ -128,32 +119,32 @@ test("labels can be added and removed from a question already in the bank", asyn
 });
 
 
-test("a section in the rail expands to its own concepts and topics", async ({ page }) => {
+test("a subject in the rail expands to its own concepts and topics", async ({ page }) => {
   const stamp = Date.now() % 100000;
-  const mathConcept = `Rail math concept ${stamp}`;
-  const englishConcept = `Rail english concept ${stamp}`;
+  const algebraConcept = `Rail algebra concept ${stamp}`;
+  const biologyConcept = `Rail biology concept ${stamp}`;
 
-  await writeConcept(page, mathConcept, "math");
-  await writeConcept(page, englishConcept, "reading_writing");
+  await writeConcept(page, algebraConcept, "Algebra");
+  await writeConcept(page, biologyConcept, "Biology");
 
   await page.goto("/bank");
   await page.getByRole("button", { name: "Ask the bank" }).click();
   const panel = page.getByRole("complementary", { name: "Ask the bank" });
   await panel.getByRole("tab", { name: "Categories" }).click();
 
-  // Folded away until the section is opened.
-  await expect(panel.getByText(mathConcept)).toBeHidden();
+  // Folded away until the subject is opened.
+  await expect(panel.getByText(algebraConcept)).toBeHidden();
 
-  await panel.getByRole("button", { name: "Expand Math" }).click();
-  await expect(panel.getByText(mathConcept)).toBeVisible();
-  // And only that section's - the other stays shut.
-  await expect(panel.getByText(englishConcept)).toBeHidden();
+  await panel.getByRole("button", { name: "Expand Algebra" }).click();
+  await expect(panel.getByText(algebraConcept)).toBeVisible();
+  // And only that subject's - the other stays shut.
+  await expect(panel.getByText(biologyConcept)).toBeHidden();
 
-  await panel.getByRole("button", { name: "Expand Reading & Writing" }).click();
-  await expect(panel.getByText(englishConcept)).toBeVisible();
+  await panel.getByRole("button", { name: "Expand Biology" }).click();
+  await expect(panel.getByText(biologyConcept)).toBeVisible();
 
   // Selecting one still filters the bank by that concept.
-  await panel.getByRole("checkbox", { name: new RegExp(mathConcept) }).click();
+  await panel.getByRole("checkbox", { name: new RegExp(algebraConcept) }).click();
   await panel.getByRole("button", { name: "Show 1 filter" }).click();
   await expect(page).toHaveURL(/concept=/);
 });

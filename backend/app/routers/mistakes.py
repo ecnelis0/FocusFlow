@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ..config import get_settings
 from ..deps import SessionDep, UserDep
@@ -13,7 +13,6 @@ from ..models import (
     Concept,
     ErrorType,
     Mistake,
-    Section,
     Urgency,
     blank_collections,
     mistake_options,
@@ -79,7 +78,9 @@ async def list_mistakes(
     user_id: UserDep,
     error_type: ErrorType | None = None,
     urgency: Urgency | None = None,
-    section: Section | None = None,
+    subject: str | None = Query(
+        default=None, description="A subject, matched as a whole string, ignoring case."
+    ),
     topic: str | None = None,
     status: AnalysisStatus | None = None,
     q: str | None = Query(
@@ -100,8 +101,8 @@ async def list_mistakes(
         stmt = stmt.where(Mistake.error_type == error_type)
     if urgency is not None:
         stmt = stmt.where(Mistake.urgency == urgency)
-    if section is not None:
-        stmt = stmt.where(Mistake.section == section)
+    if subject is not None:
+        stmt = stmt.where(func.lower(Mistake.subject) == subject.strip().lower())
     if topic is not None:
         stmt = stmt.where(Mistake.topic == topic)
     if status is not None:

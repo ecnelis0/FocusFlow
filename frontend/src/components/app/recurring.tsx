@@ -50,10 +50,6 @@ export function Recurring() {
       <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
         What keeps coming back
       </h2>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Topics you have missed more than once, and questions you were still getting
-        wrong when they came round again.
-      </p>
 
       {topics.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">

@@ -15,8 +15,9 @@ from ..query import BankQuery, Vocabulary
 from .base import AnalysisFailed, MistakeAnalysis, MistakeInput
 
 SYSTEM_PROMPT = """\
-You are an SAT tutor reviewing a question a student got wrong, so it can be filed in \
-their mistake bank.
+You are a tutor reviewing a question a student got wrong, so it can be filed in their \
+mistake bank. The subject can be anything - a science, a language, a history course - \
+and is given when the student named one.
 
 Diagnose the student, not the question. The interesting thing is what their specific \
 wrong answer reveals about how they were thinking - a sign error, a misread stem, a \
@@ -29,19 +30,20 @@ a note about what happened, weight it heavily - they were there and you were not
 
 
 INTERPRET_PROMPT = """\
-You turn a student's question about their SAT mistake bank into a database filter.
+You turn a student's question about their mistake bank into a database filter.
 
 Return only the filter. You are not answering the question - something else runs the \
 filter and reports the rows. Leave a field empty when the student did not constrain it; \
 an over-tight filter silently hides their own work from them.
 
-Resolve every relative date against today's date, given below, and write absolute dates. \
-"Reading", "verbal" and "English" all mean the reading_writing section.
+Resolve every relative date against today's date, given below, and write absolute dates.
 
-You are given the topics and concepts this bank actually contains. When the student \
-names something, match it to those - copy the exact strings. Do not invent a topic or a \
-concept title; a filter on a string that is not in the bank silently returns nothing, \
-which reads to the student as "you have no such questions".
+Subjects are free text the student typed, not a fixed list. You are given the subjects, \
+topics and concepts this bank actually contains. When the student names something, \
+match it to those - copy the exact strings, including a subject's spelling and \
+capitalisation. Do not invent a subject, a topic or a concept title; a filter on a \
+string that is not in the bank silently returns nothing, which reads to the student as \
+"you have no such questions".
 
 If the student is asking about the bank as a whole ("what am I worst at", "what should I \
 review first") rather than for a subset, return an empty filter and let them see \
@@ -53,11 +55,15 @@ topic would hide the very pattern they are asking you to find.\
 """
 
 SUMMARISE_PROMPT = """\
-You are answering a student's question about their own SAT mistake bank.
+You are answering a student's question about their own mistake bank.
 
-You are given the rows that actually matched their question. Use only those rows - do \
-not estimate, extrapolate, or mention questions that are not listed. If nothing matched, \
-say so plainly and suggest a looser question.
+You are given two things: the rows that matched their question, and the whole bank as \
+background - every concept with the student's own notes on it, every question with its \
+tags, concepts, takeaway and review record, and the totals. Answer about the matched \
+rows, and draw on the rest of the bank whenever it makes the answer more useful: what \
+else sits under the same concept, what the student wrote about it, how this compares \
+to the rest. Never invent a question or a count that is not in what you were given. If \
+nothing matched, say so plainly, and say what the bank does contain instead.
 
 When they ask what they *keep* getting wrong - "consistently", "always", "again and \
 again", "over the past month" - two things count, and you are given both:
@@ -75,8 +81,18 @@ or topic that keeps recurring, not a restatement of the list they can already se
 """
 
 
+def summarise_prompt(question: str, digest: str, context: str) -> str:
+    """The whole bank first (stable, cacheable), the matched rows and question last."""
+    parts = []
+    if context:
+        parts.append(f"The whole bank, for background:\n{context}")
+    parts.append(f"Rows that matched the question:\n{digest}")
+    parts.append(f"The student asked: {question}")
+    return "\n\n".join(parts)
+
+
 def _render(mistake: MistakeInput) -> str:
-    parts = [f"Section: {mistake.section}"]
+    parts = [f"Subject: {mistake.subject}"] if mistake.subject else []
     if mistake.source:
         parts.append(f"Source: {mistake.source}")
     parts.append(f"\nQuestion:\n{mistake.question_text}")
@@ -159,19 +175,14 @@ class ClaudeAnalyzer:
             raise AnalysisFailed("the model would not read that as a search")
         return response.parsed_output
 
-    async def summarise(self, question: str, digest: str) -> str:
+    async def summarise(self, question: str, digest: str, context: str = "") -> str:
         try:
             response = await self._client.messages.create(
                 model=self._model,
                 max_tokens=2048,
                 system=SUMMARISE_PROMPT,
                 thinking={"type": "adaptive"},
-                messages=[
-                    {
-                        "role": "user",
-                        "content": f"The student asked: {question}\n\nMatching rows:\n{digest}",
-                    }
-                ],
+                messages=[{"role": "user", "content": summarise_prompt(question, digest, context)}],
             )
         except anthropic.APIError as exc:
             raise AnalysisFailed(f"{type(exc).__name__}: {exc}") from exc

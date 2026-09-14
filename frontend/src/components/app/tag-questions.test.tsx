@@ -22,7 +22,7 @@ function concept(mistakes: ConceptDetail["mistakes"] = []): ConceptDetail {
     id: "c1",
     title: "Circumference gives the radius",
     body: null,
-    section: "math",
+    subject: "Algebra",
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: mistakes.length,

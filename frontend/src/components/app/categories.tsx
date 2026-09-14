@@ -19,8 +19,8 @@ import {
   type Facets,
   NO_FACETS,
 } from "@/lib/facets";
-import { ERROR_TYPE_LABELS, SECTION_LABELS } from "@/lib/labels";
-import { URGENCIES, type ErrorType, type Section } from "@/lib/types";
+import { ERROR_TYPE_LABELS } from "@/lib/labels";
+import { URGENCIES, type ErrorType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function Check({ on }: { on: boolean }) {
@@ -90,11 +90,11 @@ function Group({
 }
 
 /** The browsing half of the rail: every facet, multi-selectable, topics folded
- *  under the section they belong to. */
+ *  under the subject they belong to. */
 export function Categories() {
   const router = useRouter();
   const [facets, setFacets] = useState<Facets>(NO_FACETS);
-  const [expanded, setExpanded] = useState<Section[]>([]);
+  const [expanded, setExpanded] = useState<string[]>([]);
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: keys.stats(),
@@ -121,7 +121,14 @@ export function Categories() {
     slots.find((slot) => slot.key === key)?.count ?? 0;
 
   const selected = countSelected(facets);
-  const sections = Object.keys(SECTION_LABELS) as Section[];
+  // A subject exists if any question or any concept carries it: a concept written
+  // for a subject nothing is logged under yet still needs somewhere to appear.
+  const subjects = [
+    ...new Set([
+      ...data.by_subject.map((slot) => slot.key),
+      ...(concepts ?? []).flatMap((concept) => (concept.subject ? [concept.subject] : [])),
+    ]),
+  ].sort((a, b) => a.localeCompare(b));
 
   return (
     <div className="space-y-5">
@@ -137,116 +144,114 @@ export function Categories() {
         ))}
       </Group>
 
-      <Group title="Sections">
-        {sections.map((section) => {
-          const topics = data.topics.filter(
-            (entry) => entry.section === section,
-          );
-          // Concepts belong to a section too, so they expand here rather than living
-          // in a separate list you have to go and find.
-          const sectionConcepts = (concepts ?? []).filter(
-            (concept) => concept.section === section,
-          );
-          const hasChildren = topics.length > 0 || sectionConcepts.length > 0;
-          const open = expanded.includes(section);
-          return (
-            <div key={section}>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label={`${open ? "Collapse" : "Expand"} ${SECTION_LABELS[section]}`}
-                  aria-expanded={open}
-                  disabled={!hasChildren}
-                  onClick={() =>
-                    setExpanded(
-                      open
-                        ? expanded.filter((value) => value !== section)
-                        : [...expanded, section],
-                    )
-                  }
-                  className="flex size-6 shrink-0 items-center justify-center rounded text-xs text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
-                >
-                  {open ? "▾" : "▸"}
-                </button>
-                <div className="min-w-0 flex-1">
-                  <Item
-                    label={SECTION_LABELS[section]}
-                    count={countOf(data.by_section, section)}
-                    selected={has(facets, "section", section)}
-                    onToggle={() =>
-                      setFacets(toggle(facets, "section", section))
+      {subjects.length > 0 && (
+        <Group title="Subjects">
+          {subjects.map((subject) => {
+            const topics = data.topics.filter((entry) => entry.subject === subject);
+            // Concepts belong to a subject too, so they expand here rather than living
+            // in a separate list you have to go and find.
+            const subjectConcepts = (concepts ?? []).filter(
+              (concept) => concept.subject === subject,
+            );
+            const hasChildren = topics.length > 0 || subjectConcepts.length > 0;
+            const open = expanded.includes(subject);
+            return (
+              <div key={subject}>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={`${open ? "Collapse" : "Expand"} ${subject}`}
+                    aria-expanded={open}
+                    disabled={!hasChildren}
+                    onClick={() =>
+                      setExpanded(
+                        open
+                          ? expanded.filter((value) => value !== subject)
+                          : [...expanded, subject],
+                      )
                     }
-                  />
-                </div>
-              </div>
-
-              {open && (
-                <>
-                  {sectionConcepts.length > 0 && (
-                    <p className="mt-1 pl-7 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-                      Concepts
-                    </p>
-                  )}
-                  {sectionConcepts.map((concept) => (
-                    <div key={concept.id} className="flex items-center gap-1">
-                      <div className="min-w-0 flex-1">
-                        <Item
-                          label={
-                            <span className="flex items-center gap-1.5">
-                              <span className="truncate">{concept.title}</span>
-                              {concept.question_count === 0 && (
-                                <span className="shrink-0 text-[10px] text-muted-foreground">
-                                  nothing tagged
-                                </span>
-                              )}
-                            </span>
-                          }
-                          count={concept.question_count}
-                          indent
-                          selected={has(facets, "concept_ids", concept.id)}
-                          onToggle={() =>
-                            setFacets(toggle(facets, "concept_ids", concept.id))
-                          }
-                        />
-                      </div>
-                      <Link
-                        href={`/concepts/${concept.id}`}
-                        aria-label={`Open ${concept.title}`}
-                        className="flex size-6 shrink-0 items-center justify-center rounded text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                      >
-                        ↗
-                      </Link>
-                    </div>
-                  ))}
-
-                  {topics.length > 0 && (
-                    <p className="mt-2 pl-7 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-                      Topics
-                    </p>
-                  )}
-                  {topics.map((entry) => (
+                    className="flex size-6 shrink-0 items-center justify-center rounded text-xs text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
+                  >
+                    {open ? "▾" : "▸"}
+                  </button>
+                  <div className="min-w-0 flex-1">
                     <Item
-                      key={`${entry.section}:${entry.topic}`}
-                      label={entry.topic}
-                      count={entry.count}
-                      indent
-                      selected={has(facets, "topics", entry.topic)}
-                      onToggle={() =>
-                        setFacets(toggle(facets, "topics", entry.topic))
-                      }
+                      label={subject}
+                      count={countOf(data.by_subject, subject)}
+                      selected={has(facets, "subjects", subject)}
+                      onToggle={() => setFacets(toggle(facets, "subjects", subject))}
                     />
-                  ))}
-                </>
-              )}
-            </div>
-          );
-        })}
-      </Group>
+                  </div>
+                </div>
 
-      {concepts && concepts.some((concept) => concept.section === null) && (
-        <Group title="Concepts in neither section">
+                {open && (
+                  <>
+                    {subjectConcepts.length > 0 && (
+                      <p className="mt-1 pl-7 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                        Concepts
+                      </p>
+                    )}
+                    {subjectConcepts.map((concept) => (
+                      <div key={concept.id} className="flex items-center gap-1">
+                        <div className="min-w-0 flex-1">
+                          <Item
+                            label={
+                              <span className="flex items-center gap-1.5">
+                                <span className="truncate">{concept.title}</span>
+                                {concept.question_count === 0 && (
+                                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                                    nothing tagged
+                                  </span>
+                                )}
+                              </span>
+                            }
+                            count={concept.question_count}
+                            indent
+                            selected={has(facets, "concept_ids", concept.id)}
+                            onToggle={() =>
+                              setFacets(toggle(facets, "concept_ids", concept.id))
+                            }
+                          />
+                        </div>
+                        <Link
+                          href={`/concepts/${concept.id}`}
+                          aria-label={`Open ${concept.title}`}
+                          className="flex size-6 shrink-0 items-center justify-center rounded text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        >
+                          ↗
+                        </Link>
+                      </div>
+                    ))}
+
+                    {topics.length > 0 && (
+                      <p className="mt-2 pl-7 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                        Topics
+                      </p>
+                    )}
+                    {topics.map((entry) => (
+                      <Item
+                        key={`${entry.subject}:${entry.topic}`}
+                        label={entry.topic}
+                        count={entry.count}
+                        indent
+                        selected={has(facets, "topics", entry.topic)}
+                        onToggle={() =>
+                          setFacets(toggle(facets, "topics", entry.topic))
+                        }
+                      />
+                    ))}
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </Group>
+      )}
+
+      {concepts && concepts.some((concept) => concept.subject === null) && (
+        <Group title="Concepts with no subject">
           {concepts
-            .filter((concept) => concept.section === null)
+            .filter((concept) => concept.subject === null)
             .map((concept) => (
             <div key={concept.id} className="flex items-center gap-1">
               <div className="min-w-0 flex-1">

@@ -8,11 +8,11 @@ import { UrgencyBadge } from "@/components/app/urgency-badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
-import { ERROR_TYPE_LABELS, SECTION_LABELS } from "@/lib/labels";
+import { ERROR_TYPE_LABELS } from "@/lib/labels";
 import type { Answer, Mistake } from "@/lib/types";
 
 const EXAMPLES = [
-  "Everything very important from Reading in the past 3 months",
+  "Everything very important from Biology in the past 3 months",
   "What is due for review now?",
   "Which concept gaps keep coming back?",
 ];
@@ -25,10 +25,13 @@ function Hit({ mistake }: { mistake: Mistake }) {
     >
       <div className="mb-1 flex flex-wrap items-center gap-1.5">
         {mistake.urgency && <UrgencyBadge urgency={mistake.urgency} />}
-        <span className="text-[11px] text-muted-foreground">
-          {SECTION_LABELS[mistake.section]}
-          {mistake.error_type && ` · ${ERROR_TYPE_LABELS[mistake.error_type]}`}
-        </span>
+        {(mistake.subject || mistake.error_type) && (
+          <span className="text-[11px] text-muted-foreground">
+            {[mistake.subject, mistake.error_type && ERROR_TYPE_LABELS[mistake.error_type]]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        )}
       </div>
       <p className="line-clamp-2 text-sm leading-snug">{mistake.question_text}</p>
     </Link>
@@ -106,14 +109,15 @@ export function Ask() {
             <p className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
               Offline assistant — it matches your topics and concepts by keyword and
               reports counts, but it cannot reason about your bank. Set{" "}
-              <code className="font-mono">AI_PROVIDER=claude</code> and your API key in{" "}
+              <code className="font-mono">AI_PROVIDER=agent</code> in{" "}
               <code className="font-mono">.env</code> for real answers.
             </p>
           )}
           {!result.analyzer_ready && (
             <p className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-              {result.analyzer} is selected but its API key is missing, so nothing was
-              analysed.
+              {result.analyzer === "agent"
+                ? "The agent provider is selected but the Claude CLI is not signed in. Run `claude auth login` on the machine running the API."
+                : `${result.analyzer} is selected but its API key is missing, so nothing was analysed.`}
             </p>
           )}
           <p className="text-sm leading-relaxed whitespace-pre-line">{result.answer}</p>

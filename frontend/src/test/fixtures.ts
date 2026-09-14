@@ -41,8 +41,8 @@ export function makeMistake(overrides: Partial<Mistake> = {}): Mistake {
   return {
     id: "m1",
     created_at: new Date().toISOString(),
-    section: "math",
-    source: "Bluebook Practice Test 4",
+    subject: "Algebra",
+    source: "Practice Test 4",
     question_text: "If 3x + 7 = 22, what is the value of x?",
     choices: ["3", "5", "7", "15"],
     your_answer: "7",

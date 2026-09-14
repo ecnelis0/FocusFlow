@@ -1,4 +1,4 @@
-"""FastAPI app: the SAT mistake bank's API."""
+"""FastAPI app: the mistake bank's API."""
 
 from __future__ import annotations
 
@@ -12,8 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from .config import get_settings
 from .images import upload_dir
 from .migrate import upgrade
+from .readiness import analyzer_ready
 from .review import LADDER_LABELS
-from .routers import ask, concepts, images, mistakes, reviews, stats, tags
+from .routers import ask, capture, concepts, images, mistakes, reviews, stats, tags
+from .transcribe import transcriber_ready
 
 
 @asynccontextmanager
@@ -27,7 +29,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="SAT Mistake Bank", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="FocusFlow", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,6 +54,7 @@ app.include_router(tags.router)
 app.include_router(images.router)
 app.include_router(concepts.router)
 app.include_router(ask.router)
+app.include_router(capture.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -64,14 +67,17 @@ async def health() -> dict:
     """
     settings = get_settings()
     provider = settings.ai_provider.lower()
-    ready = provider == "stub" or (provider == "claude" and bool(settings.anthropic_api_key))
+    ready = analyzer_ready(settings)
 
+    transcriber_name, transcriber_ok = transcriber_ready()
     return {
         "status": "ok",
         "analyzer": settings.ai_provider,
         "analyzer_ready": ready,
-        "model": settings.anthropic_model if provider == "claude" else None,
+        "model": settings.anthropic_model if provider in ("claude", "agent") else None,
         "ladder": list(LADDER_LABELS),
+        "transcriber": transcriber_name,
+        "transcriber_ready": transcriber_ok,
     }
 
 

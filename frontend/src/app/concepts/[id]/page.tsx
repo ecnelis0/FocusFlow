@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, keys } from "@/lib/api";
-import { SECTION_LABELS } from "@/lib/labels";
 
 export default function ConceptPage() {
   const { id } = useParams<{ id: string }>();
@@ -82,9 +81,7 @@ export default function ConceptPage() {
                   Edit
                 </Button>
               </div>
-              {concept.section && (
-                <Badge variant="outline">{SECTION_LABELS[concept.section]}</Badge>
-              )}
+              {concept.subject && <Badge variant="outline">{concept.subject}</Badge>}
               {concept.body ? (
                 <p className="text-sm leading-relaxed whitespace-pre-line">{concept.body}</p>
               ) : (
