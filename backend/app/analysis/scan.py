@@ -50,9 +50,10 @@ class ScannedQuestion(BaseModel):
     )
     choices: list[str] | None = Field(
         default=None,
-        description="The answer options in order, each keeping its own label: "
-        "'A. The choice of a New York City venue...'. Null when the question is not "
-        "multiple choice.",
+        description="The answer options in order, as text only. Strip the label the "
+        "page prints in front of each one - 'A.', '(B)', '3)' - because the app draws "
+        "its own labels, and a kept one renders as 'A. A. The choice of...'. Null when "
+        "the question is not multiple choice.",
     )
     correct_answer: str | None = Field(
         default=None,
