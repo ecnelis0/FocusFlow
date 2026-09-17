@@ -116,6 +116,11 @@ async def _load(session, user_id: str, subject_id: str) -> Subject:
         select(Subject)
         .where(Subject.id == subject_id, Subject.user_id == user_id)
         .options(selectinload(Subject.folders))
+        # Sessions here are built with `expire_on_commit=False`, so a re-read after
+        # a commit hands back the instance already in the identity map - with the
+        # `folders` collection as it was loaded, not as it now is. Creating a folder
+        # then returned a subject with no folders, and a 201 to say it had worked.
+        .execution_options(populate_existing=True)
     )
     if subject is None:
         raise HTTPException(status_code=404, detail="No such subject")
@@ -127,6 +132,7 @@ async def _load_folder(session, user_id: str, folder_id: str) -> Folder:
         select(Folder)
         .where(Folder.id == folder_id, Folder.user_id == user_id)
         .options(selectinload(Folder.subject))
+        .execution_options(populate_existing=True)
     )
     if folder is None:
         raise HTTPException(status_code=404, detail="No such folder")
