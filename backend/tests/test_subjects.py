@@ -304,3 +304,56 @@ async def test_the_bank_can_show_what_is_not_in_a_folder_yet(client):
         "/mistakes/search", json={"subjects": ["Math"], "has_folder": False}
     )
     assert [m["id"] for m in found.json()] == [loose.json()["id"]]
+
+
+async def test_a_subject_on_a_question_but_in_no_row_still_gets_a_tab(client, session_factory):
+    """The failure this guards: questions that exist but have nowhere to appear.
+
+    A row can arrive without going through the API - a seed script, a restore, an
+    import - and then no `ensure_subject` ever ran for it. With the bank drawn as
+    tabs, a subject with no row has no tab, and every question under it is
+    invisible in every view. Reading the strip reconciles.
+    """
+    from app.models import Mistake, new_id, utcnow
+
+    async with session_factory() as session:
+        session.add(
+            Mistake(
+                id=new_id(),
+                user_id="local",
+                created_at=utcnow(),
+                subject="Spanish",
+                question_text="ser or estar?",
+                your_answer="ser",
+                correct_answer="estar",
+            )
+        )
+        await session.commit()
+
+    listed = (await client.get("/subjects")).json()
+    assert [s["name"] for s in listed] == ["Spanish"]
+    assert listed[0]["question_count"] == 1
+
+
+async def test_reconciling_does_not_split_one_course_into_two_tabs(client, session_factory):
+    """Rows spelled differently are one course, so they must reconcile to one tab."""
+    from app.models import Mistake, new_id, utcnow
+
+    async with session_factory() as session:
+        for spelling in ("APUSH", "apush"):
+            session.add(
+                Mistake(
+                    id=new_id(),
+                    user_id="local",
+                    created_at=utcnow(),
+                    subject=spelling,
+                    question_text=f"Something about {spelling}",
+                    your_answer="a",
+                    correct_answer="b",
+                )
+            )
+        await session.commit()
+
+    listed = (await client.get("/subjects")).json()
+    assert len(listed) == 1
+    assert listed[0]["question_count"] == 2

@@ -16,7 +16,13 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from ..deps import SessionDep, UserDep
-from ..filing import empty_folders, find_subject, rename_subject, unfile_subject
+from ..filing import (
+    empty_folders,
+    find_subject,
+    reconcile_subjects,
+    rename_subject,
+    unfile_subject,
+)
 from ..models import Concept, Folder, Mistake, Subject, new_id, utcnow
 from ..schemas import (
     FolderCreate,
@@ -141,7 +147,12 @@ async def _load_folder(session, user_id: str, folder_id: str) -> Folder:
 
 @router.get("", response_model=list[SubjectRead])
 async def list_subjects(session: SessionDep, user_id: UserDep) -> list[SubjectRead]:
-    """Every subject with its folders and their counts - one request, the whole strip."""
+    """Every subject with its folders and their counts - one request, the whole strip.
+
+    Reconciles first: a subject name on a question with no row of its own would
+    otherwise have no tab, and nothing in the UI would show those questions.
+    """
+    await reconcile_subjects(session, user_id)
     subjects = await session.scalars(
         select(Subject)
         .where(Subject.user_id == user_id)

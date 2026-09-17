@@ -109,6 +109,45 @@ async def resolve_folder(
     return folder
 
 
+async def reconcile_subjects(session: AsyncSession, user_id: str) -> None:
+    """Give every subject name in the bank a row, so no course can lose its tab.
+
+    `ensure_subject` covers writes that go through the API and the migration covers
+    the one-time upgrade, but neither covers a row that arrived any other way - a
+    seed script, a restore, an import. A question carrying a subject nobody has a
+    row for is not merely untidy: with the bank drawn as tabs, it has no tab to
+    appear under, and "my Spanish questions are gone" is the report you get.
+
+    Cheap enough to run on every read of the strip: one grouped query, and an
+    INSERT only in the case that would otherwise have lost a tab.
+    """
+    names = await session.scalars(
+        select(Mistake.subject)
+        .where(Mistake.user_id == user_id, Mistake.subject.is_not(None))
+        .union(
+            select(Concept.subject).where(
+                Concept.user_id == user_id, Concept.subject.is_not(None)
+            )
+        )
+    )
+    known = {
+        name.lower()
+        for name in await session.scalars(
+            select(Subject.name).where(Subject.user_id == user_id)
+        )
+    }
+
+    added = False
+    for name in names:
+        if name.lower() in known:
+            continue
+        known.add(name.lower())
+        await ensure_subject(session, user_id, name)
+        added = True
+    if added:
+        await session.commit()
+
+
 def file_into(row: Concept | Mistake, folder: Folder | None) -> None:
     """Put a row in a folder, and give it that folder's subject name.
 

@@ -154,9 +154,13 @@ function FolderCard({
       className={cn("group", active && "border-foreground/25 bg-secondary/40")}
     >
       <div className="flex items-start gap-2 p-3.5">
+        {/* An explicit name. Left to the DOM, this button is called "Unit 3 4
+            questions · 2 concepts" — the counts read as part of the control, and
+            it is a substring match away from the Remove button beside it. */}
         <button
           type="button"
           aria-pressed={active}
+          aria-label={`Open ${name}`}
           onClick={onOpen}
           className="min-w-0 flex-1 text-left"
         >

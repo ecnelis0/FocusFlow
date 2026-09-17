@@ -23,6 +23,34 @@ answers, your note, the topic and the AI's analysis. Each word must appear somew
 "area circle" finds a question about the area of a circle even though those words never
 sit next to each other, and "midterm" finds everything from that source.
 
+## Subjects and folders
+
+The bank is not one pile. Across the top of **The bank** are your courses as tabs —
+APUSH, SAT, Calculus — and inside each one, the topic folders you make: *Unit 3:
+Revolution*, *Related rates*. A folder holds **both halves**: the concepts filed under
+that topic and the questions logged against it, so opening one shows what you know and
+what you have got wrong about it together.
+
+A subject is a **row**, not a name found by grouping what you have logged. That is the
+point: you set your courses up before there is anything in them, and an empty course
+still gets a tab to file into. Everything is a link — the tab and the open folder both
+live in the URL, so a filtered view is shareable and survives a reload.
+
+Renaming a subject carries the new name to every question and concept under it. Moving
+a folder to another subject carries everything inside it. Deleting either keeps the
+questions: only *where they were filed* is lost, and they reappear under **Not in a
+folder**. Losing where something was filed is bad; losing the question is unthinkable.
+
+**Scan notes takes a folder up front.** Pick it beside the YouTube box before the video
+is read, and every concept and practice question that comes out of it is filed there
+and takes that subject — and the folder's course steers the reading too, because it is
+a course you actually set up rather than a word typed once. A question already in the
+bank can be moved between folders from its own page.
+
+`backend/app/filing.py` owns the rule that keeps this honest: the folder is
+authoritative, each row's `subject` is that folder's name, and nothing else writes
+either field.
+
 ## Concepts
 
 A concept is the thing behind a family of misses — the rule you keep forgetting, not

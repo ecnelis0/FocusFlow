@@ -26,6 +26,13 @@ a fixed 1h / 24h / 72h / 1w / 1mo ladder. See `README.md` for how to run it.
 
 - `backend/app/review.py` — the ladder, and `URGENCY_RANK`, the case expression that
   orders the due queue. The one file to read first.
+- `backend/app/filing.py` — where a question or concept lives: `folder_id`, and the
+  subject *name* copied onto the row beside it. One module owns both fields because
+  there are two of them for one fact. **The folder is authoritative, `subject` is its
+  name, and nothing outside `filing.py` writes either.** The copy exists because every
+  filter in `query.py`, every tally in `stats.py` and every analyzer prompt speaks in
+  subject names; the price of a copy is drift, so three operations have to carry it —
+  renaming a subject, moving a folder between subjects, and deleting a subject.
 - `backend/app/analysis/` — the analyzer contract (`analyze`, `interpret`, `summarise`),
   the offline stub, the Claude adapter. Adding a provider is one new file plus a line in
   `__init__.py`. `extract.py` is the same shape for scanned notes → concepts.
@@ -98,6 +105,11 @@ moment an unrelated spec logged a fundamental math question.
   empty-state button both called "Write a concept", and the empty one linked to the page
   it was already on. It surfaced as a Playwright strict-mode violation; the fix was the
   UI, not the selector.
+- **A button's accessible name is everything inside it.** A folder card's open button
+  wrapped both the name and the counts, so it was called "Unit 3: Revolution 4
+  questions · 2 concepts" — unreadable aloud, and a substring match away from the
+  "Remove Unit 3: Revolution" button beside it. Give a control that wraps more than its
+  label an explicit `aria-label`.
 
 ## Component registries
 
@@ -161,6 +173,22 @@ therefore live only in the CSS, under `.dark`. Change both together.
   returns unordered; each endpoint orders itself.
 - `ErrorType` and `Urgency` are closed vocabularies. Free-text "why" labels would make the slot view
   ungroupable. Add a member rather than letting the model invent one.
+- **`ON DELETE` does nothing on SQLite here.** No connection issues
+  `PRAGMA foreign_keys=ON`, so every `ondelete="SET NULL"`/`"CASCADE"` in `models.py`
+  is documentation, not behaviour. Deleting a parent must null or remove the children
+  in Python (`filing.empty_folders`). Left to the database it looks right in
+  development and only breaks on the day the app moves to Postgres.
+- **Sessions are `expire_on_commit=False`, so a re-read after a commit can be stale.**
+  A loader that re-queries a row whose collection was changed by something other than
+  the ORM (a `session.add` of a child rather than an `append` to the parent) gets the
+  identity map's copy back, with the collection as it was first loaded. Creating a
+  folder returned a subject with no folders — and a 201 saying it had worked. Add
+  `.execution_options(populate_existing=True)` to any loader used after a commit.
+- **A subject name in the bank with no `subjects` row has no tab, and its questions
+  are invisible.** `ensure_subject` covers API writes and the migration covers the
+  upgrade, but a seed, a restore or an import goes through neither — so
+  `GET /subjects` reconciles before it reads. The two case-insensitivity guards there
+  are redundant by design; a sabotage has to break both to be caught.
 - Every domain query is scoped by `user_id`, today from the `X-User-Id` header.
 - Lean on prewritten libraries and skin them; never rebuild a solved system (calendar,
   data table, form validation, rich text).

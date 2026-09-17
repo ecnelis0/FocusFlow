@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { AnalysisPanel } from "@/components/app/analysis";
 import { ConceptTags } from "@/components/app/concept-tags";
 import { MistakeImages } from "@/components/app/images";
+import { MistakeFolder } from "@/components/app/mistake-folder";
 import { MistakeLabels } from "@/components/app/mistake-labels";
 import { Empty } from "@/components/app/empty";
 import { Ladder } from "@/components/app/ladder";
@@ -87,6 +88,10 @@ export default function MistakePage() {
 
       <Panel className="px-6 py-5">
         <MistakeImages mistake={mistake} editable />
+      </Panel>
+
+      <Panel className="px-6 py-5">
+        <MistakeFolder mistake={mistake} />
       </Panel>
 
       <Panel className="px-6 py-5">
