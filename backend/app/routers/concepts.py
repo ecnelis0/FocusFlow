@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from ..config import get_settings
 from ..deps import SessionDep, UserDep
+from ..filing import UnknownFolder, ensure_subject, file_into, resolve_folder
 from ..images import MAX_BYTES, ImageRejected, store
 from ..images import delete as delete_file
 from ..models import (
@@ -50,19 +51,35 @@ def _read(concept: Concept) -> ConceptRead:
         title=concept.title,
         body=concept.body,
         subject=concept.subject,
+        folder_id=concept.folder_id,
         question_count=len(concept.mistakes),
         images=concept.images,
     )
 
 
+async def _folder(session, user_id: str, folder_id: str | None):
+    """Resolve a folder id from a request body, as a 404 when it is not theirs."""
+    try:
+        return await resolve_folder(session, user_id, folder_id)
+    except UnknownFolder as exc:
+        raise HTTPException(status_code=404, detail="No such folder") from exc
+
+
 @router.post("", response_model=ConceptRead, status_code=201)
 async def create_concept(body: ConceptCreate, session: SessionDep, user_id: UserDep) -> ConceptRead:
-    concept = Concept(user_id=user_id, **body.model_dump())
+    fields = body.model_dump()
+    folder = await _folder(session, user_id, fields.pop("folder_id", None))
+    concept = Concept(user_id=user_id, **fields)
     # Same reason as a new question's concepts: a brand-new concept has no questions,
     # and `_read` counting them must not become a lazy load after the commit.
     # Both collections, for the same reason `blank_collections` exists for questions.
     concept.mistakes = []
     concept.images = []
+    # The folder decides the subject; a subject typed without one still needs a tab.
+    if folder is not None:
+        file_into(concept, folder)
+    else:
+        await ensure_subject(session, user_id, concept.subject)
     session.add(concept)
     await session.commit()
     return _read(concept)
@@ -94,6 +111,7 @@ async def list_concepts(session: SessionDep, user_id: UserDep) -> list[ConceptRe
             title=concept.title,
             body=concept.body,
             subject=concept.subject,
+            folder_id=concept.folder_id,
             question_count=counts.get(concept.id, 0),
             images=concept.images,
         )
@@ -113,8 +131,15 @@ async def update_concept(
     concept_id: str, body: ConceptUpdate, session: SessionDep, user_id: UserDep
 ) -> ConceptRead:
     concept = await _load(session, user_id, concept_id)
-    for field, value in body.model_dump(exclude_unset=True).items():
+    fields = body.model_dump(exclude_unset=True)
+    refiled = "folder_id" in fields
+    folder = await _folder(session, user_id, fields.pop("folder_id", None))
+    for field, value in fields.items():
         setattr(concept, field, value)
+    if refiled:
+        file_into(concept, folder)
+    if "subject" in fields:
+        await ensure_subject(session, user_id, concept.subject)
     concept.updated_at = utcnow()
     await session.commit()
     return _read(concept)

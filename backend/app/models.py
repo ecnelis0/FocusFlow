@@ -18,6 +18,7 @@ from sqlalchemy import (
     Table,
     Text,
     TypeDecorator,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, selectinload
 
@@ -128,6 +129,62 @@ class ReviewOutcome(StrEnum):
     superseded = "superseded"
 
 
+class Subject(Base):
+    """A course the student is taking: "APUSH", "SAT", "Calculus".
+
+    Subjects are rows rather than distinct strings because an empty one has to
+    exist: you set up your courses before the first question is logged, and a tab
+    for a subject with nothing in it yet is the whole point of setting it up.
+
+    `Mistake.subject` and `Concept.subject` still hold the *name*, because the
+    filters, the stats and every analyzer prompt speak in subject names. The rule
+    that keeps them from drifting lives in `filing.py`: **the folder is
+    authoritative and `subject` is its denormalised name**, and nothing outside
+    that module writes either field on its own.
+    """
+
+    __tablename__ = "subjects"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_subjects_user_name"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
+
+    name: Mapped[str] = mapped_column(String(80))
+    # The student's own tab order. Ties break on name, so a fresh bank is alphabetical.
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+    folders: Mapped[list[Folder]] = relationship(
+        back_populates="subject",
+        cascade="all, delete-orphan",
+        order_by="Folder.position, Folder.name",
+    )
+
+
+class Folder(Base):
+    """A topic inside a subject: "Unit 3: Revolution", "Related rates".
+
+    Holds both halves of the bank - the concepts filed under the topic and the
+    questions logged against it - so opening a folder shows the whole of what you
+    know and what you have got wrong about that topic in one place.
+    """
+
+    __tablename__ = "folders"
+    __table_args__ = (UniqueConstraint("subject_id", "name", name="uq_folders_subject_name"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    subject_id: Mapped[str] = mapped_column(
+        ForeignKey("subjects.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
+
+    name: Mapped[str] = mapped_column(String(80))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+    subject: Mapped[Subject] = relationship(back_populates="folders")
+
+
 # A concept is the thing behind a whole family of misses, so the link is many-to-many:
 # one question can sit under several concepts, and a concept collects many questions.
 concept_mistakes = Table(
@@ -153,6 +210,12 @@ class Concept(Base):
     # Free text ("Biology", "Calculus", "Spanish"). Optional: plenty of concepts
     # (careless-work habits, pacing) belong to no subject in particular.
     subject: Mapped[str | None] = mapped_column(String(80), index=True)
+    # The topic folder this is filed in, inside that subject. Null means the concept
+    # sits loose in the subject (or in no subject at all) - never an error, just
+    # unfiled. Set only through `filing.py`, which keeps `subject` in step with it.
+    folder_id: Mapped[str | None] = mapped_column(
+        ForeignKey("folders.id", ondelete="SET NULL"), index=True
+    )
 
     mistakes: Mapped[list[Mistake]] = relationship(
         secondary=concept_mistakes,
@@ -180,6 +243,10 @@ class Mistake(Base):
     # Free text, whatever the student calls the area ("Biology", "Calculus"). Not a
     # closed vocabulary: the bank is for any subject, so the app cannot know them.
     subject: Mapped[str | None] = mapped_column(String(80), index=True)
+    # See `Concept.folder_id`. Same rule, same owner.
+    folder_id: Mapped[str | None] = mapped_column(
+        ForeignKey("folders.id", ondelete="SET NULL"), index=True
+    )
     question_text: Mapped[str] = mapped_column(Text)
     choices: Mapped[list | None] = mapped_column(JSON)
     your_answer: Mapped[str] = mapped_column(Text)

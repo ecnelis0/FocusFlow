@@ -33,12 +33,14 @@ from ..analysis.extract import (
 )
 from ..config import get_settings
 from ..deps import SessionDep, UserDep
+from ..filing import UnknownFolder, ensure_subject, file_into, resolve_folder
 from ..images import ALLOWED_FORMATS, MAX_BYTES, ImageRejected, store, upload_dir
 from ..images import delete as delete_file
 from ..models import (
     AnalysisStatus,
     Concept,
     ConceptImage,
+    Folder,
     Mistake,
     blank_collections,
     mistake_options,
@@ -125,6 +127,10 @@ class ApprovedQuestion(BaseModel):
 class CaptureCommit(BaseModel):
     concepts: list[ApprovedConcept]
     questions: list[ApprovedQuestion] = Field(default_factory=list)
+    # The folder chosen before the material was read. Everything this capture files
+    # lands there - concepts and practice questions alike - and takes its subject
+    # from it, overriding whatever subject the model proposed.
+    folder_id: str | None = None
     image_filename: str | None = None
     # Where the material came from, kept as each question's source.
     source: str | None = Field(default=None, max_length=200)
@@ -228,6 +234,7 @@ async def _file(
     approved: list[ApprovedConcept],
     existing: list[Concept],
     image: bytes | None,
+    folder: Folder | None = None,
 ) -> list[ConceptChange]:
     by_id = {concept.id: concept for concept in existing}
     by_title = {concept.title.casefold(): concept for concept in existing}
@@ -246,7 +253,11 @@ async def _file(
         if target is not None:
             addition = f"\n\n— Added from your notes, {stamp}:\n{found.body.strip()}"
             target.body = (target.body or "").rstrip() + addition
-            if target.subject is None and subject:
+            # An existing concept keeps where it already lives: adding a video's
+            # notes to a concept is not a reason to move it out of its folder.
+            if target.folder_id is None and folder is not None:
+                file_into(target, folder)
+            elif target.subject is None and subject:
                 target.subject = subject
             target.updated_at = utcnow()
             action = "updated"
@@ -263,6 +274,10 @@ async def _file(
             )
             target.mistakes = []
             target.images = []
+            if folder is not None:
+                file_into(target, folder)
+            else:
+                await ensure_subject(session, user_id, target.subject)
             session.add(target)
             by_title[title.casefold()] = target
             action = "created"
@@ -289,6 +304,7 @@ async def _log_questions(
     user_id: str,
     approved: list[ApprovedQuestion],
     source: str | None,
+    folder: Folder | None = None,
 ) -> list[Mistake]:
     """File practice questions as bank entries, tagged under their concepts.
 
@@ -327,6 +343,8 @@ async def _log_questions(
         )
         mistake.reviews.extend(build_ladder(mistake.id, logged_at))
         blank_collections(mistake)
+        if folder is not None:
+            file_into(mistake, folder)
         mistake.concepts = tagged
         session.add(mistake)
         created.append(mistake)
@@ -381,11 +399,14 @@ async def capture(
     text: Annotated[str | None, Form()] = None,
     subject: Annotated[str | None, Form()] = None,
     url: Annotated[str | None, Form()] = None,
+    folder_id: Annotated[str | None, Form()] = None,
 ) -> CaptureProposal:
     """Scan notes (picture, PDF, text, or a recording) and propose concepts.
 
-    Send either `file` or `text`. `subject` is an optional steer ("Chemistry").
-    Nothing is written: edit the proposal and send it to `/capture/commit`.
+    Send either `file` or `text`. `subject` is an optional steer ("Chemistry"), and
+    `folder_id` is the topic folder this is being filed into - a stronger steer,
+    because its subject is a course the student has actually set up. Nothing is
+    written here; the same folder id goes to `/capture/commit`, which files it.
     """
     if file is None and not (text or "").strip() and not (url or "").strip():
         raise HTTPException(status_code=422, detail="Send a file, some text, or a YouTube link.")
@@ -419,13 +440,20 @@ async def capture(
         if not transcript:
             raise HTTPException(status_code=422, detail="Nothing was said in that recording.")
 
+    try:
+        folder = await resolve_folder(session, user_id, folder_id)
+    except UnknownFolder as exc:
+        raise HTTPException(status_code=404, detail="No such folder") from exc
+    # The folder's own subject beats a typed one: it is a course that exists.
+    hint = folder.subject.name if folder is not None else " ".join((subject or "").split())[:80]
+
     existing = await _existing(session, user_id)
     capture_input = CaptureInput(
         kind=sniffed.kind,
         text=transcript if sniffed.kind in ("audio", "video") else sniffed.text,
         media_type=sniffed.media_type,
         data=data if sniffed.kind in ("image", "pdf") else None,
-        subject_hint=" ".join((subject or "").split())[:80] or None,
+        subject_hint=hint or None,
         existing=[ExistingConcept(id=c.id, title=c.title, subject=c.subject) for c in existing],
     )
 
@@ -470,9 +498,14 @@ async def commit(body: CaptureCommit, session: SessionDep, user_id: UserDep) -> 
             image = path.read_bytes()
             path.unlink(missing_ok=True)
 
+    try:
+        folder = await resolve_folder(session, user_id, body.folder_id)
+    except UnknownFolder as exc:
+        raise HTTPException(status_code=404, detail="No such folder") from exc
+
     existing = await _existing(session, user_id)
-    changes = await _file(session, user_id, body.concepts, existing, image=image)
-    questions = await _log_questions(session, user_id, body.questions, body.source)
+    changes = await _file(session, user_id, body.concepts, existing, image=image, folder=folder)
+    questions = await _log_questions(session, user_id, body.questions, body.source, folder=folder)
     return CaptureResult(changes=changes, questions=questions)
 
 

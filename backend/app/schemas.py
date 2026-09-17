@@ -21,9 +21,94 @@ def tidy_subject(value: str | None) -> str | None:
     return tidy or None
 
 
+def tidy_name(value: str) -> str:
+    """A subject or folder name, trimmed. Blank is a validation error, not a None.
+
+    Different from `tidy_subject`: a subject's *name* is the thing itself, so an
+    empty one cannot mean "no subject" the way a blank field on a question does.
+    """
+    tidy = " ".join(value.split())
+    if not tidy:
+        raise ValueError("must not be blank")
+    return tidy
+
+
+class FolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def _tidy(cls, value: str) -> str:
+        return tidy_name(value)
+
+
+class FolderUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=80)
+    # Moving a folder to another subject carries everything in it, which is why
+    # `subject` is not separately settable on the rows themselves.
+    subject_id: str | None = None
+    position: int | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _tidy(cls, value: str | None) -> str | None:
+        return None if value is None else tidy_name(value)
+
+
+class FolderRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    subject_id: str
+    name: str
+    position: int
+    created_at: datetime
+    # What is inside, so a folder card can say so without a request per folder.
+    concept_count: int = 0
+    question_count: int = 0
+
+
+class SubjectCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def _tidy(cls, value: str) -> str:
+        return tidy_name(value)
+
+
+class SubjectUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=80)
+    position: int | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _tidy(cls, value: str | None) -> str | None:
+        return None if value is None else tidy_name(value)
+
+
+class SubjectRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    position: int
+    created_at: datetime
+    folders: list[FolderRead] = []
+    # Everything under the subject, folders and loose rows alike. The tab's count.
+    concept_count: int = 0
+    question_count: int = 0
+    # How much of it is in no folder yet - what the "Unfiled" card shows.
+    unfiled_concept_count: int = 0
+    unfiled_question_count: int = 0
+
+
 class MistakeCreate(BaseModel):
     # Free text: "Biology", "Calculus", "Spanish". Optional, at most 80 characters.
+    # Ignored when `folder_id` is given: the folder decides the subject.
     subject: str | None = Field(default=None, max_length=80)
+    # The topic folder to file this in. Sets `subject` to the folder's own.
+    folder_id: str | None = None
     # Optional: say how badly this needs revisiting while you still remember. Left
     # unset, the analyzer decides.
     urgency: Urgency | None = None
@@ -89,6 +174,8 @@ class MistakeUpdate(BaseModel):
     """
 
     subject: str | None = Field(default=None, max_length=80)
+    # Send null to take it out of its folder; the subject is kept either way.
+    folder_id: str | None = None
     source: str | None = Field(default=None, max_length=200)
     question_text: str | None = None
     choices: list[str] | None = None
@@ -149,7 +236,9 @@ class ConceptSummary(BaseModel):
 class ConceptCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     body: str | None = None
+    # Ignored when `folder_id` is given: the folder decides the subject.
     subject: str | None = Field(default=None, max_length=80)
+    folder_id: str | None = None
 
     @field_validator("title")
     @classmethod
@@ -169,6 +258,7 @@ class ConceptUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     body: str | None = None
     subject: str | None = Field(default=None, max_length=80)
+    folder_id: str | None = None
 
     @field_validator("title")
     @classmethod
@@ -195,6 +285,7 @@ class ConceptRead(BaseModel):
     title: str
     body: str | None
     subject: str | None
+    folder_id: str | None = None
     question_count: int = 0
     images: list[ImageRead] = []
 
@@ -234,6 +325,7 @@ class MistakeRead(BaseModel):
     id: str
     created_at: datetime
     subject: str | None
+    folder_id: str | None = None
     source: str | None
     question_text: str
     choices: list[str] | None

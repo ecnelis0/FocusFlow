@@ -102,6 +102,12 @@ class BankQuery(BaseModel):
         default_factory=list,
         description="Topic words to match, e.g. 'circles'. Matched as substrings.",
     )
+    folder_ids: list[str] = Field(
+        default_factory=list,
+        description="Topic folder ids. The bank page sets these when a folder is "
+        "open; you have no ids to copy, so leave this empty and filter by subject "
+        "or by topic words instead.",
+    )
     text: str | None = Field(
         default=None, description="Words that must appear in the question itself."
     )
@@ -118,6 +124,11 @@ class BankQuery(BaseModel):
         default=None,
         description="True for questions filed under some concept, False for the ones "
         "filed under none. Leave unset for both.",
+    )
+    has_folder: bool | None = Field(
+        default=None,
+        description="False for questions in a subject but not yet in any of its topic "
+        "folders - what the bank's 'Unfiled' card shows. Leave unset for both.",
     )
     sort: Sort = "newest"
     limit: int = Field(default=25, ge=1, le=100)
@@ -179,6 +190,8 @@ def build_statement(user_id: str, query: BankQuery):
         )
     if query.topics:
         stmt = stmt.where(or_(*[Mistake.topic.ilike(f"%{topic}%") for topic in query.topics]))
+    if query.folder_ids:
+        stmt = stmt.where(Mistake.folder_id.in_(query.folder_ids))
     if query.text:
         clause = text_filter(query.text)
         if clause is not None:
@@ -194,6 +207,10 @@ def build_statement(user_id: str, query: BankQuery):
     if query.has_concept is not None:
         tagged = Mistake.concepts.any()
         stmt = stmt.where(tagged if query.has_concept else ~tagged)
+    if query.has_folder is not None:
+        stmt = stmt.where(
+            Mistake.folder_id.is_not(None) if query.has_folder else Mistake.folder_id.is_(None)
+        )
     if query.only_due:
         stmt = stmt.where(
             Mistake.reviews.any(
@@ -245,10 +262,17 @@ def describe(query: BankQuery) -> str:
         parts.append(f"logged since {query.logged_after}")
     elif query.logged_before:
         parts.append(f"logged before {query.logged_before}")
+    if query.folder_ids:
+        count = len(query.folder_ids)
+        parts.append(f"in {count} folder{'' if count == 1 else 's'}")
     if query.has_concept is True:
         parts.append("filed under a concept")
     elif query.has_concept is False:
         parts.append("not filed under any concept")
+    if query.has_folder is False:
+        parts.append("not in any folder")
+    elif query.has_folder is True:
+        parts.append("in a folder")
     if query.only_due:
         parts.append("due for review now")
 

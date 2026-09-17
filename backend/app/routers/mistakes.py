@@ -13,6 +13,7 @@ from ..analysis.base import AnalysisFailed
 from ..analysis.scan import ScanInput, ScanKind, ScannedQuestion, get_scanner
 from ..config import get_settings
 from ..deps import SessionDep, UserDep
+from ..filing import UnknownFolder, ensure_subject, file_into, resolve_folder
 from ..images import ALLOWED_FORMATS, MAX_BYTES
 from ..images import delete as delete_file
 from ..models import (
@@ -75,6 +76,14 @@ def _sniff_scan(data: bytes) -> tuple[ScanKind, str, bytes]:
     return "image", media_type, data
 
 
+async def _folder(session, user_id: str, folder_id: str | None):
+    """Resolve a folder id from a request body, as a 404 when it is not theirs."""
+    try:
+        return await resolve_folder(session, user_id, folder_id)
+    except UnknownFolder as exc:
+        raise HTTPException(status_code=404, detail="No such folder") from exc
+
+
 @router.post("", response_model=MistakeRead, status_code=201)
 async def log_mistake(
     body: MistakeCreate,
@@ -94,6 +103,9 @@ async def log_mistake(
     logged_at = utcnow()
     fields = body.model_dump()
     concept_ids = fields.pop("concept_ids", [])
+    # Filed through `filing.py` rather than set from the body: the folder decides
+    # the subject, and a subject typed without one still needs its tab to exist.
+    folder = await _folder(session, user_id, fields.pop("folder_id", None))
     mistake = Mistake(
         user_id=user_id,
         created_at=logged_at,
@@ -105,6 +117,10 @@ async def log_mistake(
     )
     mistake.reviews.extend(build_ladder(mistake.id, logged_at))
     blank_collections(mistake)
+    if folder is not None:
+        file_into(mistake, folder)
+    else:
+        await ensure_subject(session, user_id, mistake.subject)
 
     if concept_ids:
         # Scoped to the student: a concept id from someone else's bank must not
@@ -235,8 +251,15 @@ async def update_mistake(
     """Edit any field, the AI's included. Only the keys sent are changed."""
     mistake = await _load(session, user_id, mistake_id)
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    fields = body.model_dump(exclude_unset=True)
+    refiled = "folder_id" in fields
+    folder = await _folder(session, user_id, fields.pop("folder_id", None))
+    for field, value in fields.items():
         setattr(mistake, field, value)
+    if refiled:
+        file_into(mistake, folder)
+    if "subject" in fields:
+        await ensure_subject(session, user_id, mistake.subject)
 
     if "urgency" in body.model_fields_set and body.urgency is not None:
         mistake.urgency_is_yours = True

@@ -14,7 +14,7 @@ from .images import upload_dir
 from .migrate import upgrade
 from .readiness import analyzer_ready
 from .review import LADDER_LABELS
-from .routers import ask, capture, concepts, images, mistakes, reviews, stats, tags
+from .routers import ask, capture, concepts, images, mistakes, reviews, stats, subjects, tags
 from .transcribe import transcriber_ready
 
 
@@ -53,6 +53,8 @@ app.include_router(stats.router)
 app.include_router(tags.router)
 app.include_router(images.router)
 app.include_router(concepts.router)
+app.include_router(subjects.router)
+app.include_router(subjects.folders_router)
 app.include_router(ask.router)
 app.include_router(capture.router)
 
