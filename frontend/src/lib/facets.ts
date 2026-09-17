@@ -10,6 +10,10 @@ export interface Facets {
   subjects: string[];
   error_type: ErrorType[];
   topics: string[];
+  /** Topic folders. Set by the folder cards on the bank, not by the rail. */
+  folder_ids: string[];
+  /** false = only what is in the subject but in none of its folders. */
+  hasFolder: boolean | null;
   text: string;
 }
 
@@ -21,6 +25,8 @@ export const NO_FACETS: Facets = {
   subjects: [],
   error_type: [],
   topics: [],
+  folder_ids: [],
+  hasFolder: null,
   text: "",
 };
 
@@ -33,6 +39,8 @@ export function isEmpty(facets: Facets): boolean {
     facets.subjects.length === 0 &&
     facets.error_type.length === 0 &&
     facets.topics.length === 0 &&
+    facets.folder_ids.length === 0 &&
+    facets.hasFolder === null &&
     facets.text.trim() === ""
   );
 }
@@ -45,13 +53,22 @@ export function countSelected(facets: Facets): number {
     facets.urgency.length +
     facets.subjects.length +
     facets.error_type.length +
-    facets.topics.length
+    facets.topics.length +
+    facets.folder_ids.length +
+    (facets.hasFolder === null ? 0 : 1)
   );
 }
 
 /** Add or remove one value, leaving the other facets alone. */
 export function toggle<
-  K extends "urgency" | "subjects" | "error_type" | "topics" | "concept_ids" | "tags",
+  K extends
+    | "urgency"
+    | "subjects"
+    | "error_type"
+    | "topics"
+    | "concept_ids"
+    | "tags"
+    | "folder_ids",
 >(
   facets: Facets,
   key: K,
@@ -79,6 +96,8 @@ export function toSearchParams(facets: Facets): URLSearchParams {
   for (const value of facets.subjects) params.append("subject", value);
   for (const value of facets.error_type) params.append("error_type", value);
   for (const value of facets.topics) params.append("topic", value);
+  for (const value of facets.folder_ids) params.append("folder", value);
+  if (facets.hasFolder !== null) params.set("filed", facets.hasFolder ? "1" : "0");
   if (facets.text.trim()) params.set("q", facets.text.trim());
   return params;
 }
@@ -92,6 +111,8 @@ export function fromSearchParams(params: URLSearchParams | ReadonlyURLSearchPara
     subjects: params.getAll("subject"),
     error_type: params.getAll("error_type") as ErrorType[],
     topics: params.getAll("topic"),
+    folder_ids: params.getAll("folder"),
+    hasFolder: params.get("filed") === null ? null : params.get("filed") === "1",
     text: params.get("q") ?? "",
   };
 }
@@ -111,6 +132,8 @@ export function toQuery(facets: Facets): Partial<BankQuery> {
     subjects: facets.subjects,
     error_type: facets.error_type,
     topics: facets.topics,
+    folder_ids: facets.folder_ids,
+    has_folder: facets.hasFolder,
     text: facets.text.trim() || null,
     sort: "newest",
     limit: 100,

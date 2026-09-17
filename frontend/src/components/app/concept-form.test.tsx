@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConceptForm } from "@/components/app/concept-form";
 import { api } from "@/lib/api";
 import type { Concept } from "@/lib/types";
+import { makeSubject } from "@/test/fixtures";
 import { renderWithQuery } from "@/test/render";
 
 vi.mock("sonner", () => ({
@@ -16,6 +17,7 @@ const saved = (subject: Concept["subject"] = "Algebra"): Concept => ({
   title: "Inverse trig needs a domain",
   body: null,
   subject,
+  folder_id: null,
   created_at: new Date().toISOString(),
   updated_at: null,
   question_count: 0,
@@ -56,19 +58,14 @@ describe("ConceptForm subject", () => {
     );
   });
 
-  it("offers the subjects already in the bank without restricting to them", async () => {
-    vi.spyOn(api, "stats").mockResolvedValue({
-      total_mistakes: 2,
-      due_now: 0,
-      untagged_questions: 0,
-      reviews_completed: 0,
-      by_error_type: [],
-      by_urgency: [],
-      by_concept: [],
-      by_subject: [{ key: "Biology", count: 2 }],
-      topics: [],
-    });
-    vi.spyOn(api, "listConcepts").mockResolvedValue([saved("Calculus")]);
+  it("offers every subject you have set up, including empty ones", async () => {
+    // The list comes from the subject rows, not from tallying what has been
+    // logged. A course you created this morning and have not logged into yet is
+    // exactly the one you are about to need offered.
+    vi.spyOn(api, "listSubjects").mockResolvedValue([
+      makeSubject({ id: "s1", name: "Biology", question_count: 2 }),
+      makeSubject({ id: "s2", name: "Calculus", question_count: 0 }),
+    ]);
 
     renderWithQuery(<ConceptForm />);
 

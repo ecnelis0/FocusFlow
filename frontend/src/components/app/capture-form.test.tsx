@@ -74,6 +74,7 @@ const filed: CaptureResult = {
         title: "IBP: u gets simpler",
         body: "Pick u to be the thing that gets simpler.",
         subject: "Calculus",
+        folder_id: null,
         created_at: new Date().toISOString(),
         updated_at: null,
         question_count: 0,

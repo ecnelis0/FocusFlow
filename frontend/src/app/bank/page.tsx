@@ -6,8 +6,11 @@ import { Suspense, useMemo, useState } from "react";
 
 import { ConceptHeader } from "@/components/app/concept-header";
 import { Empty } from "@/components/app/empty";
+import { FolderGrid } from "@/components/app/folder-grid";
 import { MistakeCard } from "@/components/app/mistake-card";
 import { PageHeader } from "@/components/app/page-header";
+import { SubjectTabs } from "@/components/app/subject-tabs";
+import { useSubjectTree } from "@/components/app/use-subjects";
 import { Unreachable } from "@/components/app/unreachable";
 import { UrgencyBadge } from "@/components/app/urgency-badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +68,36 @@ function BankList() {
     router.replace(query ? `/bank?${query}` : "/bank");
   };
 
+  const { data: subjects } = useSubjectTree();
+  // One subject in the URL is a tab; two or more is a filter the rail built, and
+  // no tab can represent it, so the strip falls back to All rather than lying.
+  const tab = selected.subjects.length === 1 ? selected.subjects[0] : null;
+  const openSubject = subjects?.find((subject) => subject.name === tab) ?? null;
+
+  const selectSubject = (name: string | null) =>
+    // Folders belong to the subject being left, so they go with it. Everything
+    // else the rail set is kept: a tab narrows a filter, it does not replace one.
+    apply({
+      ...facets,
+      subjects: name === null ? [] : [name],
+      folder_ids: [],
+      hasFolder: null,
+    });
+
+  const selectFolder = (folderId: string | null) =>
+    apply({
+      ...facets,
+      folder_ids: folderId === null ? [] : [folderId],
+      hasFolder: null,
+    });
+
+  const selectUnfiled = () =>
+    apply({
+      ...facets,
+      folder_ids: [],
+      hasFolder: facets.hasFolder === false ? null : false,
+    });
+
   // Only to label the concept pills: an id in the URL means nothing to read.
   const { data: concepts } = useQuery({
     queryKey: keys.concepts(),
@@ -73,6 +106,12 @@ function BankList() {
   });
   const conceptTitle = (id: string) =>
     concepts?.find((concept) => concept.id === id)?.title ?? "concept";
+  // A folder id in the URL is as unreadable as a concept id. Look it up across
+  // every subject, not just the open one: the rail can outlive a tab change.
+  const folderName = (id: string) =>
+    subjects
+      ?.flatMap((subject) => subject.folders)
+      .find((folder) => folder.id === id)?.name ?? "folder";
 
   const query = toQuery(facets);
   const { data, isPending, isError, error } = useQuery({
@@ -90,16 +129,28 @@ function BankList() {
     facets.subjects.length === 0 &&
     facets.error_type.length === 0 &&
     facets.topics.length === 0 &&
+    facets.folder_ids.length === 0 &&
+    facets.hasFolder === null &&
     facets.hasConcept === null &&
     !facets.text.trim();
 
-  const emptyTitle = onlyEmptyConcept
+  const openFolder =
+    openSubject?.folders.find((folder) => folder.id === facets.folder_ids[0]) ?? null;
+  // A folder you just made is empty, which is right and reads exactly like a
+  // broken filter. Name it, and say what putting something in it looks like.
+  const onlyEmptyFolder = openFolder !== null && facets.concept_ids.length === 0;
+
+  const emptyTitle = onlyEmptyFolder
+    ? `Nothing is in \u201c${openFolder.name}\u201d yet.`
+    : onlyEmptyConcept
     ? `Nothing is tagged with \u201c${conceptTitle(facets.concept_ids[0])}\u201d yet.`
     : filtering
       ? "Nothing matches all of those."
       : "Nothing here.";
 
-  const emptyBody = onlyEmptyConcept
+  const emptyBody = onlyEmptyFolder
+    ? `The folder exists \u2014 nothing has been filed into it. Scan a video or some notes and pick ${openFolder.name} as its folder, or move a question into it from its own page.`
+    : onlyEmptyConcept
     ? "The concept exists \u2014 no question has been filed under it. Open it and tag some, or tag from a question\u2019s own page."
     : filtering
       ? "The filters narrow each other, so a question has to satisfy every one. Drop one and see."
@@ -108,6 +159,23 @@ function BankList() {
   return (
     <div className="space-y-6">
       <PageHeader title="The bank" />
+
+      <SubjectTabs
+        subjects={subjects ?? []}
+        selected={tab}
+        onSelect={selectSubject}
+        total={subjects?.reduce((sum, subject) => sum + subject.question_count, 0) ?? 0}
+      />
+
+      {openSubject && (
+        <FolderGrid
+          subject={openSubject}
+          selected={facets.folder_ids[0] ?? null}
+          unfiledSelected={facets.hasFolder === false}
+          onSelect={selectFolder}
+          onSelectUnfiled={selectUnfiled}
+        />
+      )}
 
       <Input
         value={facets.text}
@@ -161,6 +229,19 @@ function BankList() {
               onRemove={() => apply(toggle(facets, "topics", value))}
             />
           ))}
+          {facets.folder_ids.map((value) => (
+            <Pill
+              key={value}
+              label={folderName(value)}
+              onRemove={() => apply(toggle(facets, "folder_ids", value))}
+            />
+          ))}
+          {facets.hasFolder !== null && (
+            <Pill
+              label={facets.hasFolder ? "In a folder" : "Not in a folder"}
+              onRemove={() => apply({ ...facets, hasFolder: null })}
+            />
+          )}
           <Button size="sm" variant="ghost" onClick={() => apply(NO_FACETS)}>
             Clear all
           </Button>
@@ -195,12 +276,14 @@ function BankList() {
           title={emptyTitle}
           body={emptyBody}
           action={
-            onlyEmptyConcept
-              ? {
-                  href: `/concepts/${facets.concept_ids[0]}`,
-                  label: "Tag questions with it",
-                }
-              : { href: "/log", label: "Log a miss" }
+            onlyEmptyFolder
+              ? { href: "/capture", label: "Scan something into it" }
+              : onlyEmptyConcept
+                ? {
+                    href: `/concepts/${facets.concept_ids[0]}`,
+                    label: "Tag questions with it",
+                  }
+                : { href: "/log", label: "Log a miss" }
           }
         />
       )}

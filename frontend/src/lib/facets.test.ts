@@ -20,6 +20,8 @@ const PICKED: Facets = {
   subjects: ["Calculus"],
   error_type: ["concept_gap"],
   topics: ["limits"],
+  folder_ids: [],
+  hasFolder: null,
   text: "",
 };
 

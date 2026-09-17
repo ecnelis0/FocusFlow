@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 
+import { FolderPicker } from "@/components/app/folder-picker";
 import { Panel } from "@/components/app/panel";
 import { Section } from "@/components/app/section";
 import { Button } from "@/components/ui/button";
@@ -136,6 +137,9 @@ export function CaptureForm() {
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
   const [subject, setSubject] = useState("");
+  // Chosen before the material is read: it steers the reading, and it is where
+  // everything approved from this capture is filed.
+  const [folderId, setFolderId] = useState<string | null>(null);
   // Three stages: the form, the proposal being edited, and what was filed.
   const [proposal, setProposal] = useState<CaptureProposal | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -154,7 +158,7 @@ export function CaptureForm() {
   });
 
   const send = useMutation({
-    mutationFn: () => captureNotes({ file, text, url, subject }),
+    mutationFn: () => captureNotes({ file, text, url, subject, folderId }),
     onSuccess: (proposed) => {
       setResult(null);
       setProposal(proposed);
@@ -203,6 +207,7 @@ export function CaptureForm() {
             choices: question.choices.length > 0 ? question.choices : null,
           })),
         image_filename: proposal?.image_filename ?? null,
+        folder_id: folderId,
         source: proposal?.title
           ? `Video: ${proposal.title}`.slice(0, 200)
           : proposal
@@ -215,6 +220,8 @@ export function CaptureForm() {
       setDrafts([]);
       setQuestionDrafts([]);
       queryClient.invalidateQueries({ queryKey: keys.concepts() });
+      // The folder's counts just changed, and the bank draws its strip from them.
+      queryClient.invalidateQueries({ queryKey: keys.subjects() });
       queryClient.invalidateQueries({ queryKey: keys.stats() });
       queryClient.invalidateQueries({ queryKey: ["mistakes"] });
       queryClient.invalidateQueries({ queryKey: ["reviews"] });
@@ -373,25 +380,32 @@ export function CaptureForm() {
           )}
         </Section>
 
-        <div>
-          <Label htmlFor="capture-subject">Subject</Label>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Optional. A steer for the reading, e.g. &ldquo;Chemistry&rdquo;.
-          </p>
-          <Input
-            id="capture-subject"
-            className="mt-1.5 max-w-xs"
-            list="capture-subjects"
-            placeholder="Chemistry"
-            value={subject}
-            onChange={(event) => setSubject(event.target.value)}
-          />
-          <datalist id="capture-subjects">
-            {subjects.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-        </div>
+        <FolderPicker id="capture-folder" value={folderId} onChange={setFolderId} />
+
+        {/* Only when there is no folder to file into. A subject and a folder are
+            two ways of saying where this goes, and offering both is how they end
+            up disagreeing — the folder wins on the server either way. */}
+        {folderId === null && (
+          <div>
+            <Label htmlFor="capture-subject">Subject</Label>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Optional. A steer for the reading, e.g. &ldquo;Chemistry&rdquo;.
+            </p>
+            <Input
+              id="capture-subject"
+              className="mt-1.5 max-w-xs"
+              list="capture-subjects"
+              placeholder="Chemistry"
+              value={subject}
+              onChange={(event) => setSubject(event.target.value)}
+            />
+            <datalist id="capture-subjects">
+              {subjects.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </div>
+        )}
 
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={!ready}>

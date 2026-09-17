@@ -1,4 +1,4 @@
-import type { DueReview, Mistake, ReviewEvent } from "@/lib/types";
+import type { Concept, DueReview, Mistake, ReviewEvent, Subject } from "@/lib/types";
 
 const HOUR = 3600_000;
 
@@ -42,6 +42,7 @@ export function makeMistake(overrides: Partial<Mistake> = {}): Mistake {
     id: "m1",
     created_at: new Date().toISOString(),
     subject: "Algebra",
+    folder_id: null,
     source: "Practice Test 4",
     question_text: "If 3x + 7 = 22, what is the value of x?",
     choices: ["3", "5", "7", "15"],
@@ -73,4 +74,35 @@ export function makeMistake(overrides: Partial<Mistake> = {}): Mistake {
 export function makeDueReview(overrides: Partial<Mistake> = {}): DueReview {
   const mistake = makeMistake({ reviews: makeLadder(2), ...overrides });
   return { review: mistake.reviews[0], mistake };
+}
+
+export function makeConcept(overrides: Partial<Concept> = {}): Concept {
+  return {
+    id: "c1",
+    title: "Circumference gives you the radius first",
+    body: null,
+    subject: "Math",
+    folder_id: null,
+    created_at: new Date().toISOString(),
+    updated_at: null,
+    question_count: 0,
+    images: [],
+    ...overrides,
+  };
+}
+
+/** A subject with one folder in it, which is the shape the bank's tab strip draws. */
+export function makeSubject(overrides: Partial<Subject> = {}): Subject {
+  return {
+    id: "s1",
+    name: "APUSH",
+    position: 1,
+    created_at: new Date().toISOString(),
+    folders: [],
+    concept_count: 0,
+    question_count: 0,
+    unfiled_concept_count: 0,
+    unfiled_question_count: 0,
+    ...overrides,
+  };
 }

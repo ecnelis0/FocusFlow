@@ -12,6 +12,7 @@ function concept(overrides: Partial<ConceptDetail> = {}): ConceptDetail {
     title: "Circumference gives you the radius first",
     body: "C = 2πr, so r = C / 2π.",
     subject: "Algebra",
+    folder_id: null,
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: 3,

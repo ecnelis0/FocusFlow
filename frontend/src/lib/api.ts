@@ -6,6 +6,7 @@ import type {
   ConceptDraft,
   DueReview,
   ErrorType,
+  Folder,
   Mistake,
   MistakeDraft,
   MistakeEdit,
@@ -14,6 +15,7 @@ import type {
   ScannedQuestion,
   Stats,
   StudentOutcome,
+  Subject,
   TagCount,
   Urgency,
 } from "./types";
@@ -219,6 +221,35 @@ export const api = {
       method: "DELETE",
     }),
 
+  /** Every subject with its folders and their counts — the whole tab strip in
+   *  one request, rather than a call per folder to draw it. */
+  listSubjects: () => request<Subject[]>("/subjects"),
+
+  createSubject: (name: string) =>
+    request<Subject>("/subjects", { method: "POST", body: JSON.stringify({ name }) }),
+
+  /** A rename carries the new name to every question and concept under it. */
+  updateSubject: (id: string, edit: { name?: string; position?: number }) =>
+    request<Subject>(`/subjects/${id}`, { method: "PATCH", body: JSON.stringify(edit) }),
+
+  /** Deletes the subject and its folders. The questions survive, unfiled. */
+  deleteSubject: (id: string) => request<void>(`/subjects/${id}`, { method: "DELETE" }),
+
+  /** Returns the whole subject, so the strip redraws from the one response. */
+  createFolder: (subjectId: string, name: string) =>
+    request<Subject>(`/subjects/${subjectId}/folders`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+
+  /** Moving a folder to another subject carries everything inside it. */
+  updateFolder: (
+    id: string,
+    edit: { name?: string; subject_id?: string; position?: number },
+  ) => request<Folder>(`/folders/${id}`, { method: "PATCH", body: JSON.stringify(edit) }),
+
+  deleteFolder: (id: string) => request<void>(`/folders/${id}`, { method: "DELETE" }),
+
   stats: () => request<Stats>("/stats"),
 
   /** Ask a question about the bank. The model writes the filter; the rows are real. */
@@ -235,6 +266,7 @@ export const keys = {
   upcoming: () => ["reviews", "upcoming"] as const,
   stats: () => ["stats"] as const,
   concepts: () => ["concepts"] as const,
+  subjects: () => ["subjects"] as const,
   tags: () => ["tags"] as const,
   concept: (id: string) => ["concept", id] as const,
 };

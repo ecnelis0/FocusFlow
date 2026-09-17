@@ -104,12 +104,16 @@ export async function captureNotes(input: {
   text?: string;
   url?: string;
   subject?: string;
+  /** The topic folder this is being filed into. A stronger steer than `subject`:
+   *  its subject is a course the student has actually set up. */
+  folderId?: string | null;
 }): Promise<CaptureProposal> {
   const body = new FormData();
   if (input.file) body.append("file", input.file, input.file.name);
   if (input.text?.trim()) body.append("text", input.text);
   if (input.url?.trim()) body.append("url", input.url.trim());
   if (input.subject?.trim()) body.append("subject", input.subject.trim());
+  if (input.folderId) body.append("folder_id", input.folderId);
 
   const response = await fetch(`${API_URL}/capture`, { method: "POST", body });
   if (!response.ok) throw await failure(response);
@@ -121,6 +125,8 @@ export async function approveCapture(input: {
   concepts: ApprovedConcept[];
   questions: ApprovedQuestion[];
   image_filename: string | null;
+  /** Everything filed by this capture lands here and takes its subject. */
+  folder_id?: string | null;
   source: string | null;
 }): Promise<CaptureResult> {
   const response = await fetch(`${API_URL}/capture/commit`, {

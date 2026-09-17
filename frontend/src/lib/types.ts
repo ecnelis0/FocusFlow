@@ -41,6 +41,35 @@ export interface TagCount {
   suggested: boolean;
 }
 
+/** A topic inside a subject. Holds both the concepts filed under it and the
+ *  questions logged against it. */
+export interface Folder {
+  id: string;
+  subject_id: string;
+  name: string;
+  position: number;
+  created_at: string;
+  concept_count: number;
+  question_count: number;
+}
+
+/** A course — "APUSH", "SAT", "Calculus". One tab on the bank.
+ *
+ *  A row rather than a distinct string found by grouping, because an empty one has
+ *  to exist: you set your courses up before you log anything into them. */
+export interface Subject {
+  id: string;
+  name: string;
+  position: number;
+  created_at: string;
+  folders: Folder[];
+  concept_count: number;
+  question_count: number;
+  /** How much of the subject is in no folder yet — what the "Unfiled" card shows. */
+  unfiled_concept_count: number;
+  unfiled_question_count: number;
+}
+
 export interface ConceptSummary {
   id: string;
   title: string;
@@ -50,8 +79,11 @@ export interface Concept extends ConceptSummary {
   created_at: string;
   updated_at: string | null;
   body: string | null;
-  /** Free text — "Biology", "Calculus" — or nothing. */
+  /** Free text — "Biology", "Calculus" — or nothing. The folder's name when it
+   *  is in one; the backend keeps the two in step. */
   subject: string | null;
+  /** The topic folder it is filed in, or null for loose in the subject. */
+  folder_id: string | null;
   question_count: number;
   images: MistakeImage[];
 }
@@ -63,7 +95,9 @@ export interface ConceptDetail extends Concept {
 export interface ConceptDraft {
   title: string;
   body?: string | null;
+  /** Ignored when `folder_id` is sent: the folder decides the subject. */
   subject?: string | null;
+  folder_id?: string | null;
 }
 
 export interface MistakeImage {
@@ -81,6 +115,7 @@ export interface Mistake {
   id: string;
   created_at: string;
   subject: string | null;
+  folder_id: string | null;
   source: string | null;
   question_text: string;
   choices: string[] | null;
@@ -155,6 +190,7 @@ export type MistakeEdit = Partial<
   Pick<
     Mistake,
     | "subject"
+    | "folder_id"
     | "source"
     | "question_text"
     | "choices"
@@ -184,11 +220,14 @@ export interface BankQuery {
   error_type: ErrorType[];
   subjects: string[];
   topics: string[];
+  folder_ids: string[];
   text: string | null;
   logged_after: string | null;
   logged_before: string | null;
   only_due: boolean;
   has_concept: boolean | null;
+  /** False for questions in a subject but in none of its folders. */
+  has_folder: boolean | null;
   sort: BankSort;
   limit: number;
 }
@@ -206,6 +245,7 @@ export interface Answer {
 
 export interface MistakeDraft {
   subject?: string | null;
+  folder_id?: string | null;
   urgency?: Urgency | null;
   concept_ids?: string[];
   tags?: string[];

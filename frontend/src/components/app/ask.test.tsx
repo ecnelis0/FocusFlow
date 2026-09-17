@@ -17,10 +17,12 @@ const EMPTY_QUERY: BankQuery = {
   error_type: [],
   subjects: [],
   topics: [],
+  folder_ids: [],
   text: null,
   logged_after: null,
   logged_before: null,
   only_due: false,
+  has_folder: null,
   sort: "newest",
   limit: 25,
 };
