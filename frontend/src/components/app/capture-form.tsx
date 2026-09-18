@@ -146,6 +146,9 @@ export function CaptureForm() {
   const [questionDrafts, setQuestionDrafts] = useState<QuestionDraft[]>([]);
   const [result, setResult] = useState<CaptureResult | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
+  // Which concepts are open for editing. Reading is the default; correcting the
+  // model is the exception, so the fields are what costs a click, not the prose.
+  const [editing, setEditing] = useState<ReadonlySet<string>>(new Set());
 
   const { data: concepts } = useQuery({ queryKey: keys.concepts(), queryFn: api.listConcepts });
   const subjects = Array.from(
@@ -164,6 +167,7 @@ export function CaptureForm() {
       setProposal(proposed);
       setDrafts(proposed.concepts.map(toDraft));
       setQuestionDrafts((proposed.questions ?? []).map(toQuestionDraft));
+      setEditing(new Set());
       setShowTranscript(false);
       setFile(null);
       setText("");
@@ -219,6 +223,7 @@ export function CaptureForm() {
       setProposal(null);
       setDrafts([]);
       setQuestionDrafts([]);
+      setEditing(new Set());
       queryClient.invalidateQueries({ queryKey: keys.concepts() });
       // The folder's counts just changed, and the bank draws its strip from them.
       queryClient.invalidateQueries({ queryKey: keys.subjects() });
@@ -240,7 +245,15 @@ export function CaptureForm() {
     setProposal(null);
     setDrafts([]);
     setQuestionDrafts([]);
+    setEditing(new Set());
   };
+
+  const toggleEditing = (id: string) =>
+    setEditing((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
 
   const updateQuestion = (id: string, patch: Partial<QuestionDraft>) =>
     setQuestionDrafts((current) =>
@@ -441,85 +454,135 @@ export function CaptureForm() {
                   <li key={draft.id}>
                     <Panel className={cn(!draft.keep && "opacity-50")}>
                       <div className="space-y-3 px-4 py-4">
-                        <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={draft.keep}
+                                aria-label={`Keep concept ${index + 1}`}
+                                onChange={(event) =>
+                                  updateDraft(draft.id, { keep: event.target.checked })
+                                }
+                              />
+                              <span className="text-xs text-muted-foreground">
+                                {index + 1} of {drafts.length}
+                              </span>
+                            </label>
+                            {draft.where && (
+                              <span className="text-xs text-muted-foreground">{draft.where}</span>
+                            )}
+                            {draft.subject && !editing.has(draft.id) && (
+                              <span className="text-xs text-muted-foreground">
+                                {draft.subject}
+                              </span>
+                            )}
+                          </div>
+                          {/* One name per button, not six called "Edit": a duplicate
+                              accessible name is a bug, and the index is what tells
+                              them apart. */}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            aria-label={
+                              editing.has(draft.id)
+                                ? `Stop editing concept ${index + 1}`
+                                : `Edit concept ${index + 1}`
+                            }
+                            aria-expanded={editing.has(draft.id)}
+                            disabled={!draft.keep || approve.isPending}
+                            onClick={() => toggleEditing(draft.id)}
+                          >
+                            {editing.has(draft.id) ? "Done" : "Edit"}
+                          </Button>
+                        </div>
+
+                        {/* Read first, edit second. What the model made of the
+                            material is something to understand before it is
+                            something to correct, and a page of form fields is the
+                            one shape that cannot be read. */}
+                        {editing.has(draft.id) ? (
+                          <>
+                            <div>
+                              <Label htmlFor={`draft-title-${index}`}>Concept</Label>
+                              <Input
+                                id={`draft-title-${index}`}
+                                className="mt-1"
+                                value={draft.title}
+                                disabled={!draft.keep || approve.isPending}
+                                onChange={(event) =>
+                                  updateDraft(draft.id, { title: event.target.value })
+                                }
+                              />
+                            </div>
+
+                            <div>
+                              <Label htmlFor={`draft-body-${index}`}>Description</Label>
+                              <Textarea
+                                id={`draft-body-${index}`}
+                                className="mt-1"
+                                rows={4}
+                                value={draft.body}
+                                disabled={!draft.keep || approve.isPending}
+                                onChange={(event) =>
+                                  updateDraft(draft.id, { body: event.target.value })
+                                }
+                              />
+                            </div>
+
+                            <div>
+                              <Label htmlFor={`draft-subject-${index}`}>Subject</Label>
+                              <Input
+                                id={`draft-subject-${index}`}
+                                className="mt-1 max-w-xs"
+                                list="capture-subjects"
+                                value={draft.subject}
+                                disabled={!draft.keep || approve.isPending}
+                                onChange={(event) =>
+                                  updateDraft(draft.id, { subject: event.target.value })
+                                }
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <div className="space-y-1.5">
+                            <h3 className="text-base font-medium tracking-[-0.01em]">
+                              {draft.title || "Untitled"}
+                            </h3>
+                            {draft.body.trim() ? (
+                              <p className="text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
+                                {draft.body}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-muted-foreground italic">
+                                No description came back for this one. Edit it to write your
+                                own.
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Merging is a decision about where this lands, so it stays
+                            visible while reading rather than hiding behind Edit. */}
+                        {draft.existing_id && (
                           <label className="flex items-center gap-2 text-sm">
                             <input
                               type="checkbox"
-                              checked={draft.keep}
-                              aria-label={`Keep concept ${index + 1}`}
-                              onChange={(event) =>
-                                updateDraft(draft.id, { keep: event.target.checked })
-                              }
-                            />
-                            <span className="text-xs text-muted-foreground">
-                              {index + 1} of {drafts.length}
-                            </span>
-                          </label>
-                          {draft.where && (
-                            <span className="text-xs text-muted-foreground">{draft.where}</span>
-                          )}
-                        </div>
-
-                        <div>
-                          <Label htmlFor={`draft-title-${index}`}>Concept</Label>
-                          <Input
-                            id={`draft-title-${index}`}
-                            className="mt-1"
-                            value={draft.title}
-                            disabled={!draft.keep || approve.isPending}
-                            onChange={(event) =>
-                              updateDraft(draft.id, { title: event.target.value })
-                            }
-                          />
-                        </div>
-
-                        <div>
-                          <Label htmlFor={`draft-body-${index}`}>Description</Label>
-                          <Textarea
-                            id={`draft-body-${index}`}
-                            className="mt-1"
-                            rows={4}
-                            value={draft.body}
-                            disabled={!draft.keep || approve.isPending}
-                            onChange={(event) =>
-                              updateDraft(draft.id, { body: event.target.value })
-                            }
-                          />
-                        </div>
-
-                        <div className="flex flex-wrap items-end gap-4">
-                          <div>
-                            <Label htmlFor={`draft-subject-${index}`}>Subject</Label>
-                            <Input
-                              id={`draft-subject-${index}`}
-                              className="mt-1 max-w-xs"
-                              list="capture-subjects"
-                              value={draft.subject}
+                              checked={draft.merge}
                               disabled={!draft.keep || approve.isPending}
                               onChange={(event) =>
-                                updateDraft(draft.id, { subject: event.target.value })
+                                updateDraft(draft.id, { merge: event.target.checked })
                               }
                             />
-                          </div>
-                          {draft.existing_id && (
-                            <label className="flex items-center gap-2 pb-2 text-sm">
-                              <input
-                                type="checkbox"
-                                checked={draft.merge}
-                                disabled={!draft.keep || approve.isPending}
-                                onChange={(event) =>
-                                  updateDraft(draft.id, { merge: event.target.checked })
-                                }
-                              />
-                              <span>
-                                Add to existing{" "}
-                                <span className="font-medium">
-                                  &ldquo;{draft.existing_title}&rdquo;
-                                </span>
+                            <span>
+                              Add to existing{" "}
+                              <span className="font-medium">
+                                &ldquo;{draft.existing_title}&rdquo;
                               </span>
-                            </label>
-                          )}
-                        </div>
+                            </span>
+                          </label>
+                        )}
                       </div>
                     </Panel>
                   </li>

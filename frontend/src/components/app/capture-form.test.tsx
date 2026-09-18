@@ -120,16 +120,20 @@ describe("CaptureForm", () => {
     );
     await screen.findByText("Check before filing");
 
-    expect(screen.getByLabelText("Concept", { selector: "#draft-title-0" })).toHaveValue(
-      "Integration by parts",
-    );
-    expect(screen.getByLabelText("Description", { selector: "#draft-body-0" })).toHaveValue(
-      "Pick u to be the thing that gets simpler.",
-    );
-    expect(screen.getByLabelText("Concept", { selector: "#draft-title-1" })).toHaveValue(
-      "Chain rule",
-    );
+    // Read as prose, not as a page of form fields: the description is the point.
+    expect(
+      screen.getByRole("heading", { name: "Integration by parts" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Pick u to be the thing that gets simpler."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Chain rule" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Outside, keep the inside, times the inside's derivative."),
+    ).toBeInTheDocument();
     expect(screen.getByText("page 1")).toBeInTheDocument();
+    // Nothing is editable until asked for.
+    expect(screen.queryByLabelText("Description")).not.toBeInTheDocument();
     // The model's match is shown as a choice, ticked by default.
     expect(screen.getByRole("checkbox", { name: /Add to existing/ })).toBeChecked();
     expect(screen.getByRole("button", { name: /^Approve and log 2 concepts/ })).toBeEnabled();
@@ -144,6 +148,7 @@ describe("CaptureForm", () => {
     renderWithQuery(<CaptureForm />);
     await scan(user);
 
+    await user.click(screen.getByRole("button", { name: "Edit concept 1" }));
     const title = screen.getByLabelText("Concept", { selector: "#draft-title-0" });
     await user.clear(title);
     await user.type(title, "IBP: u gets simpler");
@@ -172,6 +177,42 @@ describe("CaptureForm", () => {
     );
     expect(screen.getByText("new")).toBeInTheDocument();
     expect(screen.queryByText("Check before filing")).not.toBeInTheDocument();
+  });
+
+  it("a concept opens for editing on request, and closes back to the new wording", async () => {
+    send.mockResolvedValue(proposal);
+    const user = userEvent.setup();
+
+    renderWithQuery(<CaptureForm />);
+    await scan(user);
+
+    await user.click(screen.getByRole("button", { name: "Edit concept 1" }));
+    const body = screen.getByLabelText("Description", { selector: "#draft-body-0" });
+    await user.clear(body);
+    await user.type(body, "My own wording.");
+    await user.click(screen.getByRole("button", { name: "Stop editing concept 1" }));
+
+    // Back to prose, showing what was just written rather than the model's line.
+    expect(screen.queryByLabelText("Description")).not.toBeInTheDocument();
+    expect(screen.getByText("My own wording.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Pick u to be the thing that gets simpler."),
+    ).not.toBeInTheDocument();
+    // The other concept was never opened, and is untouched.
+    expect(screen.getByRole("button", { name: "Edit concept 2" })).toBeInTheDocument();
+  });
+
+  it("the merge choice is visible without opening the editor", async () => {
+    // Where a concept lands is a decision to see while reading, not a field to
+    // go looking for.
+    send.mockResolvedValue(proposal);
+    const user = userEvent.setup();
+
+    renderWithQuery(<CaptureForm />);
+    await scan(user);
+
+    expect(screen.queryByLabelText("Concept")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /Add to existing/ })).toBeChecked();
   });
 
   it("unticking the merge files a new concept instead", async () => {

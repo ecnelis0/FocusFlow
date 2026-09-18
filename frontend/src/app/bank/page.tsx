@@ -277,7 +277,7 @@ function BankList() {
           body={emptyBody}
           action={
             onlyEmptyFolder
-              ? { href: "/capture", label: "Scan something into it" }
+              ? { href: "/", label: "Put some material into it" }
               : onlyEmptyConcept
                 ? {
                     href: `/concepts/${facets.concept_ids[0]}`,

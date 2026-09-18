@@ -8,13 +8,16 @@ import { SidePanelToggle } from "@/components/app/side-panel";
 import { api, keys } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+/** Study is first because it is the front door: material goes in there, and the
+ *  concepts and questions everything else lists are what comes out of it. The
+ *  mistake bank's own report sits at the bottom, where a summary belongs. */
 const LINKS = [
-  { href: "/", label: "Dashboard" },
-  { href: "/log", label: "Log a miss" },
-  { href: "/capture", label: "Scan notes" },
+  { href: "/", label: "Study" },
   { href: "/bank", label: "The bank" },
   { href: "/concepts", label: "Concepts" },
   { href: "/review", label: "Review" },
+  { href: "/log", label: "Log a miss" },
+  { href: "/dashboard", label: "Dashboard" },
 ];
 
 function DueBadge({ due }: { due: number }) {
