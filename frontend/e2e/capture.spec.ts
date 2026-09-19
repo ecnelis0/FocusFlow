@@ -7,20 +7,36 @@ test("scanned notes are proposed for review, edited, then filed on approval", as
   const first = `Osmosis ${stamp}: water moves toward the higher solute concentration.`;
   const second = `Diffusion ${stamp}: particles spread from high to low concentration.`;
 
-  await page.goto("/capture");
+  await page.goto("/");
   await page.getByLabel("Notes to file").fill(`${first}\n\n${second}`);
   await page.getByLabel("Subject").fill("Biology");
   await page.getByRole("button", { name: "Scan for concepts" }).click();
 
-  // Every concept, with a description, editable, and nothing filed yet.
+  // Every concept comes back as a heading and a description you can read —
+  // not as a page of form fields — and nothing is filed yet.
   await expect(page.getByRole("heading", { name: "Check before filing" })).toBeVisible({
     timeout: 15_000,
   });
-  const title = page.locator("#draft-title-0");
-  await expect(title).toHaveValue(new RegExp(`Osmosis ${stamp}`));
-  await expect(page.locator("#draft-body-1")).toHaveValue(new RegExp(`Diffusion ${stamp}`));
+  await expect(page.getByRole("heading", { name: `Osmosis ${stamp}` })).toBeVisible();
+  await expect(
+    page.getByText("water moves toward the higher solute concentration"),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Diffusion ${stamp}` })).toBeVisible();
+  await expect(
+    page.getByText("particles spread from high to low concentration"),
+  ).toBeVisible();
+  await expect(page.locator("#draft-title-0")).toBeHidden();
 
+  // Correcting the model is behind Edit, and closing it shows the new wording.
+  await page.getByRole("button", { name: "Edit concept 1" }).click();
+  const title = page.locator("#draft-title-0");
+  await expect(title).toHaveValue(`Osmosis ${stamp}`);
   await title.fill(`Osmosis ${stamp}, my wording`);
+  await page.getByRole("button", { name: "Stop editing concept 1" }).click();
+  await expect(
+    page.getByRole("heading", { name: `Osmosis ${stamp}, my wording` }),
+  ).toBeVisible();
+
   await page.getByRole("checkbox", { name: "Keep concept 2" }).uncheck();
   await page.getByRole("button", { name: "Approve and log 1 concept" }).click();
 
@@ -28,7 +44,7 @@ test("scanned notes are proposed for review, edited, then filed on approval", as
     timeout: 15_000,
   });
   await expect(page.getByRole("link", { name: new RegExp(`Osmosis ${stamp}, my wording`) })).toBeVisible();
-  await expect(page.getByText("new")).toHaveCount(1);
+  await expect(page.getByText("new", { exact: true })).toHaveCount(1);
 
   // The struck-out one never reached the bank.
   await page.goto("/concepts");
@@ -39,7 +55,7 @@ test("scanned notes are proposed for review, edited, then filed on approval", as
 test("the same concept again is offered as a merge the student can accept", async ({ page }) => {
   const stamp = Date.now() % 100000;
 
-  await page.goto("/capture");
+  await page.goto("/");
   await page.getByLabel("Notes to file").fill(`Photosynthesis ${stamp}: light becomes glucose.`);
   await page.getByRole("button", { name: "Scan for concepts" }).click();
   await page.getByRole("button", { name: "Approve and log 1 concept" }).click();
@@ -62,7 +78,7 @@ test("the same concept again is offered as a merge the student can accept", asyn
 test("a text file dropped on the page is read as notes", async ({ page }) => {
   const stamp = Date.now() % 100000;
 
-  await page.goto("/capture");
+  await page.goto("/");
   await page.getByLabel("Choose a file of notes").setInputFiles({
     name: "notes.txt",
     mimeType: "text/plain",
@@ -71,7 +87,7 @@ test("a text file dropped on the page is read as notes", async ({ page }) => {
   await expect(page.getByText("notes.txt")).toBeVisible();
   await page.getByRole("button", { name: "Scan for concepts" }).click();
 
-  await expect(page.locator("#draft-title-0")).toHaveValue(new RegExp(`Mitosis ${stamp}`), {
+  await expect(page.getByRole("heading", { name: `Mitosis ${stamp}` })).toBeVisible({
     timeout: 15_000,
   });
 });

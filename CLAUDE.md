@@ -53,6 +53,13 @@ a fixed 1h / 24h / 72h / 1w / 1mo ladder. See `README.md` for how to run it.
 - `backend/app/routers/mistakes.py` — `POST /mistakes?analyze=false` logs without asking
   the AI, `PATCH /mistakes/{id}` edits any field, `POST /mistakes/{id}/analyze` asks for
   the debrief and refuses (409) to overwrite an edited analysis without `force=true`.
+- `frontend/src/app/page.tsx` is **Study**, the capture surface, and the mistake
+  dashboard lives at `/dashboard`. A route that reads material is the front door; the
+  report on what is already filed is not. `frontend/src/components/app/capture-form.tsx`
+  shows each proposed concept as prose with its fields behind a per-concept **Edit** —
+  each toggle named for its index, because six buttons called "Edit" is a duplicate
+  accessible name. `folder-picker.tsx` can create a subject and a folder in place, so
+  the last step of a capture never sends you to another page to make one.
 - `frontend/src/lib/types.ts` mirrors `backend/app/schemas.py`. Change them together.
 - `frontend/src/lib/facets.ts` — the multi-select model, and the only place facets are
   translated to and from the URL. The URL is the source of truth for the bank's filters,

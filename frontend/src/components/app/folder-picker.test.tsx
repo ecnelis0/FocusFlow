@@ -60,15 +60,15 @@ describe("FolderPicker", () => {
     renderWithQuery(<FolderPicker value={null} onChange={onChange} />);
     await screen.findByLabelText("File it into");
     await user.click(screen.getByRole("button", { name: "New folder" }));
-    await user.type(screen.getByLabelText("Subject"), "APUSH");
-    await user.type(screen.getByLabelText("Folder"), "Unit 4: Constitution");
+    await user.type(screen.getByLabelText("Subject for the folder"), "APUSH");
+    await user.type(screen.getByLabelText("Folder name"), "Unit 4: Constitution");
     await user.click(screen.getByRole("button", { name: "Create folder" }));
 
     await waitFor(() => expect(onChange).toHaveBeenCalledWith("f9"));
     expect(api.createFolder).toHaveBeenCalledWith("s1", "Unit 4: Constitution");
     // A subject that already exists is reused, not duplicated.
     expect(createSubject).not.toHaveBeenCalled();
-    expect(screen.queryByLabelText("Folder")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Folder name")).not.toBeInTheDocument();
   });
 
   it("a subject that does not exist yet is made first", async () => {
@@ -83,8 +83,8 @@ describe("FolderPicker", () => {
     renderWithQuery(<FolderPicker value={null} onChange={onChange} />);
     await screen.findByLabelText("File it into");
     await user.click(screen.getByRole("button", { name: "New folder" }));
-    await user.type(screen.getByLabelText("Subject"), "Biology");
-    await user.type(screen.getByLabelText("Folder"), "Cells");
+    await user.type(screen.getByLabelText("Subject for the folder"), "Biology");
+    await user.type(screen.getByLabelText("Folder name"), "Cells");
     await user.click(screen.getByRole("button", { name: "Create folder" }));
 
     await waitFor(() => expect(onChange).toHaveBeenCalledWith("f7"));
@@ -104,8 +104,8 @@ describe("FolderPicker", () => {
     renderWithQuery(<FolderPicker value={null} onChange={vi.fn()} />);
     await screen.findByLabelText("File it into");
     await user.click(screen.getByRole("button", { name: "New folder" }));
-    await user.type(screen.getByLabelText("Subject"), "apush");
-    await user.type(screen.getByLabelText("Folder"), "Unit 5");
+    await user.type(screen.getByLabelText("Subject for the folder"), "apush");
+    await user.type(screen.getByLabelText("Folder name"), "Unit 5");
     await user.click(screen.getByRole("button", { name: "Create folder" }));
 
     await waitFor(() => expect(api.createFolder).toHaveBeenCalledWith("s1", "Unit 5"));
@@ -129,7 +129,7 @@ describe("FolderPicker", () => {
     renderWithQuery(<FolderPicker value={null} onChange={vi.fn()} />);
     await screen.findByLabelText("File it into");
     await user.click(screen.getByRole("button", { name: "New folder" }));
-    await user.type(screen.getByLabelText("Subject"), "APUSH");
+    await user.type(screen.getByLabelText("Subject for the folder"), "APUSH");
 
     expect(screen.getByRole("button", { name: "Create folder" })).toBeDisabled();
   });

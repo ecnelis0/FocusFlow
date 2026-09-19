@@ -123,7 +123,7 @@ test("notes scanned into a chosen folder land in it, concepts and questions alik
 
   // The folder is chosen up front, before the material is read — so it steers the
   // reading as well as deciding where the result goes.
-  await page.goto("/capture");
+  await page.goto("/");
   await page.getByPlaceholder("Integration by parts").fill(
     `${idea}. The reactant that runs out first caps how much product you can make. ` +
       `Work in moles, never in grams, or the ratio is wrong before you start.`,
@@ -137,6 +137,49 @@ test("notes scanned into a chosen folder land in it, concepts and questions alik
 
   // The folder now holds what the scan produced — and the count proves it rather
   // than a toast that says the request succeeded.
+  await page.goto("/bank");
+  await page.getByRole("tab", { name: new RegExp(`^${subject} `) }).click();
+  const card = page.getByRole("button", { name: `Open ${folder}` });
+  await expect(card).toBeVisible();
+  await expect(card).not.toContainText("0 concepts");
+});
+
+test("a folder can be made on the study page, and the material files straight into it", async ({
+  page,
+}) => {
+  // The flow this app is for: material in hand, no folder for it yet. Leaving to
+  // make one on The bank used to cost whatever had already been typed here.
+  const subject = stamped("Physics");
+  const folder = stamped("Kinematics");
+  const idea = `Terminal velocity ${Date.now() % 1000000}`;
+
+  await page.goto("/");
+  await page
+    .getByPlaceholder("Integration by parts")
+    .fill(
+      `${idea}. A falling body stops speeding up when drag matches weight. ` +
+        `Heavier means faster at the limit, not sooner to it.`,
+    );
+
+  await page.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("Subject for the folder").fill(subject);
+  await page.getByLabel("Folder name").fill(folder);
+  await page.getByRole("button", { name: "Create folder" }).click();
+
+  // Made, chosen, and the form is still holding the notes that were typed first.
+  await expect(page.getByLabel("File it into")).toHaveValue(/.+/);
+  await expect(page.getByPlaceholder("Integration by parts")).toHaveValue(
+    new RegExp(idea),
+  );
+
+  await page.getByRole("button", { name: "Scan for concepts" }).click();
+  await expect(page.getByRole("button", { name: /Approve/ })).toBeVisible({
+    timeout: 20_000,
+  });
+  await page.getByRole("button", { name: /Approve/ }).click();
+  await expect(page.getByText(/Filed \d+ concept/)).toBeVisible({ timeout: 20_000 });
+
+  // The subject was created along with the folder, and holds what was filed.
   await page.goto("/bank");
   await page.getByRole("tab", { name: new RegExp(`^${subject} `) }).click();
   const card = page.getByRole("button", { name: `Open ${folder}` });

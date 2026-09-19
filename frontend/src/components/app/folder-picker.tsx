@@ -119,7 +119,7 @@ export function FolderPicker({
         <div className="mt-3 space-y-3 rounded-lg border border-dashed px-4 py-3">
           <div className="flex flex-wrap gap-3">
             <div>
-              <Label htmlFor={`${id}-subject`}>Subject</Label>
+              <Label htmlFor={`${id}-subject`}>Subject for the folder</Label>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 An existing one, or a new course.
               </p>
@@ -141,7 +141,7 @@ export function FolderPicker({
               </datalist>
             </div>
             <div>
-              <Label htmlFor={`${id}-folder`}>Folder</Label>
+              <Label htmlFor={`${id}-folder`}>Folder name</Label>
               <p className="mt-0.5 text-xs text-muted-foreground">The topic inside it.</p>
               <Input
                 id={`${id}-folder`}

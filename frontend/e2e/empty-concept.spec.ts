@@ -60,7 +60,7 @@ test("questions with no concept are findable and taggable", async ({ page }) => 
   await writeConcept(page, title);
 
   // The dashboard says how many are unfiled.
-  await page.goto("/");
+  await page.goto("/dashboard");
   const nudge = page.getByRole("link", { name: /not filed under any concept/ });
   await expect(nudge).toBeVisible({ timeout: 10_000 });
   await nudge.click();

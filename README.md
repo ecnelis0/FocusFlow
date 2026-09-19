@@ -15,8 +15,13 @@ and the ladder restarts from the top.
 | `backend/` | FastAPI + SQLAlchemy 2.0 (async). Owns the database, the ladder, and the analyzer. |
 | `frontend/` | Next.js App Router + TypeScript, shadcn/ui, TanStack Query, Motion. |
 
-Screens: a dashboard of slots ("why you're losing points"), a log form, the bank with
-filters, a question detail page with the analysis and its ladder, and a review session.
+Screens: **Study** at `/`, where material goes in and concepts come out; the bank with
+filters; a question detail page with the analysis and its ladder; a review session; a log
+form; and a dashboard of slots ("why you're losing points") at `/dashboard`.
+
+Study is the front door on purpose. Everything the other screens list — concepts, the
+questions in the bank, the ladder — is what comes *out* of reading some material, so the
+first screen is the one that takes it rather than a report on what is already filed.
 
 Search looks at **every field, word by word**: the question, where it came from, both
 answers, your note, the topic and the AI's analysis. Each word must appear somewhere, so
@@ -41,8 +46,8 @@ a folder to another subject carries everything inside it. Deleting either keeps 
 questions: only *where they were filed* is lost, and they reappear under **Not in a
 folder**. Losing where something was filed is bad; losing the question is unthinkable.
 
-**Scan notes takes a folder up front.** Pick it beside the YouTube box before the video
-is read, and every concept and practice question that comes out of it is filed there
+**Study takes a folder up front.** Pick it beside the YouTube box before the video
+is read — or make one there, subject and all, without leaving the page — and every concept and practice question that comes out of it is filed there
 and takes that subject — and the folder's course steers the reading too, because it is
 a course you actually set up rather than a word typed once. A question already in the
 bank can be moved between folders from its own page.
@@ -80,13 +85,16 @@ a concept removes only the tags; the questions are untouched.
 
 ## Scanning notes into concepts
 
-You do not have to type a concept to have one. **Scan notes** in the nav takes a photo of
+You do not have to type a concept to have one. **Study**, the app's front page, takes a photo of
 a handwritten page, a PDF, a text file, a pasted block of text, a **recording** — drop a
 file, or press *Record a voice note* and talk — or a **YouTube link**. For a video the
 captions are read (the uploader's, then YouTube's automatic ones); a video with none has
 its audio downloaded and transcribed locally, the same path a recording takes. The AI goes through the whole thing, every
 page, and lists **every concept it contains with a description of each**, and where it
-came from ("page 3").
+came from ("page 3"). They come back as something to read — a heading and its
+description in prose — because understanding what the AI found is the point and a page
+of form fields is the one shape that cannot be read. Correcting any of it is behind
+**Edit** on the concept itself.
 
 **It pulls out the practice questions too.** Every question the material poses — worked
 examples, exercises, quiz items, the questions a lecturer asks and then answers — is listed

@@ -39,7 +39,7 @@ test("the dashboard leads with what to fix first", async ({ page }) => {
   await page.getByRole("button", { name: "Log it and ask the AI" }).click();
   await expect(page).toHaveURL(/\/bank\/[0-9a-f]{32}/);
 
-  await page.goto("/");
+  await page.goto("/dashboard");
 
   const section = page.locator("section", { hasText: "What to fix first" });
   await expect(section.getByText("Fundamental concept")).toBeVisible({ timeout: 10_000 });
