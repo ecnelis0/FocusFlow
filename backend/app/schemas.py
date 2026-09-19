@@ -286,6 +286,10 @@ class ConceptRead(BaseModel):
     body: str | None
     subject: str | None
     folder_id: str | None = None
+    # The broader concept this hangs under, null for a top-level one. The tree is
+    # sent as parent pointers rather than nested children: a concept is serialised
+    # in several places and a recursive shape would have to be cut off somewhere.
+    parent_id: str | None = None
     question_count: int = 0
     images: list[ImageRead] = []
 

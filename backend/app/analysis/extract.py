@@ -66,6 +66,15 @@ class ExtractedConcept(BaseModel):
         description="If this is the same concept as one already in the bank, copy that "
         "concept's title exactly so the notes are added to it. Otherwise null.",
     )
+    parent_title: str | None = Field(
+        default=None,
+        description="The title of the broader concept in your own `concepts` list that "
+        "this one belongs under - copy it exactly. 'The Battle of Yorktown' goes under "
+        "'The American Revolution'. Null only for the handful of big organising "
+        "concepts that are themselves the top of the map. Never point a concept at "
+        "itself, and never make a chain longer than one level: every concept is either "
+        "an organising one or a detail directly beneath one.",
+    )
     where: str | None = Field(
         default=None,
         description="Where in the material this came from - 'page 3', 'second "
@@ -114,10 +123,12 @@ class CaptureExtraction(BaseModel):
         description="One or two sentences on what these notes cover, addressed to the student."
     )
     concepts: list[ExtractedConcept] = Field(
-        description="Every single distinct concept in the notes, in the order they "
-        "appear, from the first page to the last. Do not stop early, do not cap the "
-        "list, do not skip a page. An empty list only if the material contains nothing "
-        "worth remembering."
+        description="The material organised as a two-level map, parents before their "
+        "own children. First the handful of big organising concepts it is really "
+        "about (parent_title null) - usually two to six, the ones a student would name "
+        "if asked what the material covered. Then, under each, the details that belong "
+        "to it, every one that is worth remembering. An empty list only if the material "
+        "contains nothing worth remembering."
     )
     questions: list[ExtractedQuestion] = Field(
         default_factory=list,
@@ -143,6 +154,12 @@ class StubExtractor:
 
     Cannot read pictures or PDFs; for those it files one placeholder concept so the
     whole loop is demonstrable without a key.
+
+    It approximates the two-level map the real extractor builds by treating the
+    first paragraph as the organising concept and hanging the rest beneath it. That
+    is a crude rule and would be wrong on real notes, but offline the point is to
+    produce the *shape* - a parent with children - so the map has a tree to draw
+    and the filing code has parents to resolve.
     """
 
     name = "stub"
@@ -179,6 +196,9 @@ class StubExtractor:
                     title=title,
                     body=body,
                     subject=subject,
+                    # The first one found is the branch; everything after it hangs
+                    # off that branch. One level deep, never itself.
+                    parent_title=concepts[0].title if concepts else None,
                     existing_title=existing.get(title.casefold()),
                 )
             )
@@ -221,13 +241,30 @@ EXTRACT_PROMPT = """\
 You are a tutor reading a student's notes so they can be filed into their concept bank.
 
 A concept is the thing behind a family of mistakes: a rule, a definition, a method, a \
-distinction, a trap. Pull out every single distinct one the notes contain - go through \
-the whole document, every page, and list each concept with its own description. Do not \
-stop after the first few; do not summarise the page instead of listing what is on it; \
-do not invent material that is not there; do not pad a single idea into several. Title \
-each concept as something the student can recall, and write its body \
-as the note they would want to re-read a month later, keeping their own examples and \
-phrasing where they exist.
+distinction, a trap. Title each one as something the student can recall, and write its \
+body as the note they would want to re-read a month later, keeping their own examples \
+and phrasing where they exist. Do not invent material that is not there, and do not pad \
+a single idea into several.
+
+**Organise what you find into two levels, because the result is drawn as a mind map.**
+
+The top level is the handful of big ideas the material is really about - "The American \
+Revolution", "The Enlightenment", "Cell transport". Usually two to six of them. These \
+are what a student would name if you asked what the material covered, and each one is \
+the middle of its own branch of the map. Give each a body that says what the whole \
+branch is about and why its parts hang together, not a definition of the phrase.
+
+Everything else is a detail, and every detail names its parent with parent_title: "The \
+Battle of Yorktown", "Thomas Paine's Common Sense" and "The Proclamation Line of 1763" \
+all sit under "The American Revolution". Be thorough here - a detail worth remembering \
+should be in the map - but a detail is still a thing worth remembering, not every \
+sentence that was said. If a passage only restates the idea above it, it is not a \
+concept; fold it into that concept's body instead. Forty flat, similar concepts is the \
+failure to avoid: the same material as six branches with their details underneath is \
+what the student actually wanted.
+
+If the material genuinely covers one idea only, that is one top-level concept with its \
+details beneath - do not invent branches to fill a map.
 
 Handwriting may be messy and a transcript may have mis-heard words - read for the \
 meaning and correct obvious errors, but say in the body when a passage was illegible.

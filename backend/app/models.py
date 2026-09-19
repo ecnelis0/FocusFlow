@@ -217,6 +217,25 @@ class Concept(Base):
         ForeignKey("folders.id", ondelete="SET NULL"), index=True
     )
 
+    # The broader concept this sits under - "Battle of Yorktown" beneath "The
+    # American Revolution". Null means this is one of the big organising ideas, the
+    # kind a mind map puts in the middle. Self-referential, so the concepts in a
+    # folder form a tree rather than a flat list of forty things.
+    #
+    # `ondelete` is documentation on SQLite (no connection sets `foreign_keys=ON`),
+    # so deleting a parent must orphan its children in Python - see
+    # `routers/concepts.py`. Left to the database, a deleted parent would leave
+    # children pointing at a row that is gone.
+    parent_id: Mapped[str | None] = mapped_column(
+        ForeignKey("concepts.id", ondelete="SET NULL"), index=True
+    )
+    parent: Mapped[Concept | None] = relationship(
+        back_populates="children", remote_side=[id]
+    )
+    children: Mapped[list[Concept]] = relationship(
+        back_populates="parent", order_by="Concept.title"
+    )
+
     mistakes: Mapped[list[Mistake]] = relationship(
         secondary=concept_mistakes,
         back_populates="concepts",

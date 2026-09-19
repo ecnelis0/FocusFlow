@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from ..config import get_settings
@@ -52,6 +52,7 @@ def _read(concept: Concept) -> ConceptRead:
         body=concept.body,
         subject=concept.subject,
         folder_id=concept.folder_id,
+        parent_id=concept.parent_id,
         question_count=len(concept.mistakes),
         images=concept.images,
     )
@@ -112,6 +113,7 @@ async def list_concepts(session: SessionDep, user_id: UserDep) -> list[ConceptRe
             body=concept.body,
             subject=concept.subject,
             folder_id=concept.folder_id,
+            parent_id=concept.parent_id,
             question_count=counts.get(concept.id, 0),
             images=concept.images,
         )
@@ -147,10 +149,24 @@ async def update_concept(
 
 @router.delete("/{concept_id}", status_code=204)
 async def delete_concept(concept_id: str, session: SessionDep, user_id: UserDep) -> None:
-    """Deletes the concept, its tags and its diagrams. The questions are untouched."""
+    """Deletes the concept, its tags and its diagrams. The questions are untouched.
+
+    Anything nested under it is kept and promoted to the top level rather than
+    deleted with it: the children are concepts in their own right, and losing
+    "Battle of Yorktown" because "The American Revolution" was tidied away is the
+    kind of silent destruction this app exists not to do.
+    """
     concept = await _load(session, user_id, concept_id)
     filenames = [image.filename for image in concept.images]
 
+    # SQLite runs no `ON DELETE` here - no connection sets `foreign_keys=ON`. The
+    # ORM would in fact null these itself, having the relationship: this statement
+    # is not what makes the behaviour correct today, and removing it breaks no
+    # test. It is here so the behaviour does not depend on a cascade default that
+    # a later `passive_deletes=True` would quietly reverse.
+    await session.execute(
+        update(Concept).where(Concept.parent_id == concept.id).values(parent_id=None)
+    )
     await session.delete(concept)
     await session.commit()
 

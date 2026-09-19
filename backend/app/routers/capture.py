@@ -77,6 +77,9 @@ class ProposedConcept(BaseModel):
     title: str
     body: str
     subject: str | None
+    # The title of the broader concept this sits under, from this same proposal.
+    # Null for one of the branches the map is built around.
+    parent_title: str | None
     # Where in the notes it came from ("page 3"), when the model could tell.
     where: str | None
     # The existing concept the model says this is, if any. The student can drop it.
@@ -112,6 +115,9 @@ class ApprovedConcept(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     body: str = ""
     subject: str | None = Field(default=None, max_length=80)
+    # The title of the concept this nests under - one of the others being approved,
+    # or one already in the bank. Resolved by title after every row exists.
+    parent_title: str | None = Field(default=None, max_length=200)
     existing_id: str | None = None
 
 
@@ -228,6 +234,52 @@ def _attach(concept: Concept, data: bytes) -> None:
     )
 
 
+def _link_parents(
+    approved: list[ApprovedConcept], by_title: dict[str, Concept]
+) -> None:
+    """Point each concept at the broader one it named, once every row exists.
+
+    Set as a column, not through the `parent` relationship: assigning the
+    relationship loads the other side, and these rows are not committed yet.
+
+    Two links are refused rather than stored, because each makes a map that cannot
+    be drawn or walked: a parent that is not among the concepts we have, and one
+    that closes a cycle. The cycle is the dangerous one - writing it would raise
+    nothing, and every later walk up the tree would spin.
+
+    The `parent.id == child.id` test below is a fast path, not a third guard:
+    removing it changes no outcome, because a concept named as its own parent is
+    a cycle of length one and the walk catches it on its first hop. It is kept
+    because reading "a concept is not its own parent" beats inferring it.
+    """
+    by_id = {concept.id: concept for concept in by_title.values()}
+
+    for found in approved:
+        wanted = (found.parent_title or "").strip().casefold()
+        if not wanted:
+            continue
+        child = by_title.get(" ".join(found.title.split())[:200].casefold())
+        parent = by_title.get(wanted)
+        if child is None or parent is None or parent.id == child.id:
+            continue
+
+        # Walk up from the proposed parent: reaching the child means this link
+        # would close a loop. The hop limit guards a cycle that predates this
+        # capture, which the walk would otherwise never leave.
+        ancestor: Concept | None = parent
+        closes_a_loop = False
+        for _ in range(50):
+            if ancestor is None:
+                break
+            if ancestor.id == child.id:
+                closes_a_loop = True
+                break
+            ancestor = by_id.get(ancestor.parent_id) if ancestor.parent_id else None
+
+        if not closes_a_loop:
+            child.parent_id = parent.id
+
+
 async def _file(
     session,
     user_id: str,
@@ -274,6 +326,10 @@ async def _file(
             )
             target.mistakes = []
             target.images = []
+            # Initialised, not left to lazy-load: a new row whose collection is
+            # first touched at response time raises MissingGreenlet there rather
+            # than here.
+            target.children = []
             if folder is not None:
                 file_into(target, folder)
             else:
@@ -285,6 +341,10 @@ async def _file(
         if image is not None:
             _attach(target, image)
         changes.append(ConceptChange(concept=_read(target), action=action))
+
+    # After the loop, never inside it: a concept may name a parent that appears
+    # later in the list, and a title only resolves once that row has been made.
+    _link_parents(approved, by_title)
 
     await session.commit()
     # Re-read after commit so ids, timestamps and image urls are the stored ones.
@@ -375,6 +435,12 @@ def _propose_questions(extraction: CaptureExtraction) -> list[ProposedQuestion]:
 
 def _propose(extraction: CaptureExtraction, existing: list[Concept]) -> list[ProposedConcept]:
     by_title = {concept.title.casefold(): concept for concept in existing}
+    # A parent is only meaningful if it is one of the concepts in this same
+    # proposal. The model is asked for exact titles; tidy them the same way the
+    # titles themselves are tidied so the two still match afterwards.
+    parents = {
+        c.title.casefold(): " ".join(c.title.split())[:200] for c in extraction.concepts
+    }
     proposals: list[ProposedConcept] = []
     for found in extraction.concepts:
         match = by_title.get((found.existing_title or "").casefold())
@@ -383,6 +449,7 @@ def _propose(extraction: CaptureExtraction, existing: list[Concept]) -> list[Pro
                 title=" ".join(found.title.split())[:200],
                 body=found.body.strip(),
                 subject=" ".join((found.subject or "").split())[:80] or None,
+                parent_title=parents.get((found.parent_title or "").casefold()),
                 where=found.where,
                 existing_id=match.id if match else None,
                 existing_title=match.title if match else None,

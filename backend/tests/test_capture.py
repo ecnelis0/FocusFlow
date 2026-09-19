@@ -40,7 +40,7 @@ async def approve(client, proposal: dict, **overrides) -> dict:
     """Send the proposal back as-is, the way the page does when nothing is edited."""
     body = {
         "concepts": [
-            {k: c[k] for k in ("title", "body", "subject", "existing_id")}
+            {k: c[k] for k in ("title", "body", "subject", "parent_title", "existing_id")}
             for c in proposal["concepts"]
         ],
         "image_filename": proposal["image_filename"],
@@ -306,7 +306,7 @@ async def test_approved_questions_are_logged_and_tagged_under_their_concepts(cli
     proposal = (await client.post("/capture", data={"text": LESSON})).json()
     body = {
         "concepts": [
-            {k: c[k] for k in ("title", "body", "subject", "existing_id")}
+            {k: c[k] for k in ("title", "body", "subject", "parent_title", "existing_id")}
             for c in proposal["concepts"]
         ],
         "questions": [
