@@ -13,6 +13,7 @@ function concept(overrides: Partial<ConceptDetail> = {}): ConceptDetail {
     body: "C = 2πr, so r = C / 2π.",
     subject: "Algebra",
     folder_id: null,
+  parent_id: null,
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: 3,

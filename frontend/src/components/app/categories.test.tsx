@@ -17,6 +17,7 @@ const CONCEPTS = [
     body: null,
     subject: "Algebra",
     folder_id: null,
+    parent_id: null,
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: 2,
@@ -28,6 +29,7 @@ const CONCEPTS = [
     body: null,
     subject: null,
     folder_id: null,
+    parent_id: null,
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: 0,
@@ -62,7 +64,9 @@ const STATS: Stats = {
 
 /** Expands Algebra, where its concepts live. */
 async function openAlgebra(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole("button", { name: "Expand Algebra" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Expand Algebra" }),
+  );
 }
 
 async function open() {
@@ -115,7 +119,9 @@ describe("Categories", () => {
     renderWithQuery(<Categories />);
     await screen.findByText("How urgent");
 
-    expect(screen.getByRole("button", { name: "Expand Algebra" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Expand Algebra" }),
+    ).toBeDisabled();
   });
 
   it("selects across facets at once and sends all four to the bank", async () => {
@@ -124,7 +130,9 @@ describe("Categories", () => {
     await user.click(screen.getByRole("checkbox", { name: /Very important/ }));
     await user.click(screen.getByRole("checkbox", { name: /^Algebra/ }));
     await user.click(screen.getByRole("button", { name: "Expand Algebra" }));
-    await user.click(screen.getByRole("checkbox", { name: /linear equations/ }));
+    await user.click(
+      screen.getByRole("checkbox", { name: /linear equations/ }),
+    );
     await user.click(screen.getByRole("checkbox", { name: /Concept gap/ }));
 
     await user.click(screen.getByRole("button", { name: "Show 4 filters" }));
@@ -153,15 +161,23 @@ describe("Categories", () => {
     const user = await open();
     await user.click(screen.getByRole("checkbox", { name: /Very important/ }));
     await user.click(screen.getByRole("checkbox", { name: /Concept gap/ }));
-    expect(screen.getByRole("button", { name: "Show 2 filters" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show 2 filters" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Clear" }));
 
-    expect(screen.getByRole("button", { name: "Show questions" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Show questions" }),
+    ).toBeDisabled();
   });
 
   it("lists a subject that only a concept carries, so it has somewhere to appear", async () => {
-    vi.spyOn(api, "stats").mockResolvedValue({ ...STATS, by_subject: [], topics: [] });
+    vi.spyOn(api, "stats").mockResolvedValue({
+      ...STATS,
+      by_subject: [],
+      topics: [],
+    });
     vi.spyOn(api, "listConcepts").mockResolvedValue([
       { ...CONCEPTS[0], subject: "Chemistry" },
     ]);
@@ -187,7 +203,6 @@ describe("Categories", () => {
   });
 });
 
-
 describe("Categories concepts", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -202,14 +217,18 @@ describe("Categories concepts", () => {
     expect(within(empty).getByText("nothing tagged")).toBeInTheDocument();
 
     await openAlgebra(user);
-    const full = screen.getByRole("checkbox", { name: /Circumference gives the radius/ });
+    const full = screen.getByRole("checkbox", {
+      name: /Circumference gives the radius/,
+    });
     expect(within(full).queryByText("nothing tagged")).not.toBeInTheDocument();
   });
 
   it("offers the questions filed under no concept at all", async () => {
     const user = await open();
 
-    await user.click(await screen.findByRole("checkbox", { name: /No concept yet/ }));
+    await user.click(
+      await screen.findByRole("checkbox", { name: /No concept yet/ }),
+    );
     await user.click(screen.getByRole("button", { name: "Show 1 filter" }));
 
     const url = new URL(push.mock.calls[0][0], "http://x");
@@ -229,7 +248,6 @@ describe("Categories concepts", () => {
     expect(url.searchParams.getAll("concept")).toEqual(["c1"]);
   });
 });
-
 
 describe("Categories concept links", () => {
   beforeEach(() => {
@@ -251,7 +269,9 @@ describe("Categories concept links", () => {
     const user = await open();
 
     expect(
-      screen.queryByRole("checkbox", { name: /Circumference gives the radius/ }),
+      screen.queryByRole("checkbox", {
+        name: /Circumference gives the radius/,
+      }),
     ).not.toBeInTheDocument();
 
     await openAlgebra(user);

@@ -9,6 +9,9 @@ export interface ProposedConcept {
   title: string;
   body: string;
   subject: string | null;
+  /** The title of the broader concept in this same proposal that it sits under,
+   *  or null for one of the branches the map is built around. */
+  parent_title: string | null;
   /** Where in the notes it came from ("page 3"), when the model could tell. */
   where: string | null;
   /** The existing concept the model says this is. Dropping it files a new one. */
@@ -53,6 +56,10 @@ export interface ApprovedConcept {
   title: string;
   body: string;
   subject: string | null;
+  /** The title of the concept this nests under. The server resolves it by title
+   *  once every row exists, and ignores one it cannot find — so a parent the
+   *  student struck out leaves its children at the top rather than unfiled. */
+  parent_title: string | null;
   existing_id: string | null;
 }
 

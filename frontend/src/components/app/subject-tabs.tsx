@@ -20,12 +20,17 @@ export function SubjectTabs({
   selected,
   onSelect,
   total,
+  countOf = (subject) => subject.question_count,
 }: {
   subjects: Subject[];
   /** The selected subject's name, or null for "All". */
   selected: string | null;
   onSelect: (name: string | null) => void;
   total: number;
+  /** What the number beside each tab counts. The bank counts questions; the map
+   *  counts concepts, and showing questions there would put "123" next to a
+   *  subject with 55 things drawn on it. */
+  countOf?: (subject: Subject) => number;
 }) {
   const queryClient = useQueryClient();
   const [naming, setNaming] = useState(false);
@@ -66,7 +71,7 @@ export function SubjectTabs({
           <Tab
             key={subject.id}
             label={subject.name}
-            count={subject.question_count}
+            count={countOf(subject)}
             active={selected === subject.name}
             onClick={() => onSelect(subject.name)}
           />

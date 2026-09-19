@@ -84,6 +84,11 @@ export interface Concept extends ConceptSummary {
   subject: string | null;
   /** The topic folder it is filed in, or null for loose in the subject. */
   folder_id: string | null;
+  /** The broader concept this hangs under — "The Battle of Yorktown" beneath
+   *  "The American Revolution" — or null for one of the big organising ideas.
+   *  Sent as a parent pointer, not nested children, so the tree is assembled
+   *  once where it is drawn. */
+  parent_id: string | null;
   question_count: number;
   images: MistakeImage[];
 }

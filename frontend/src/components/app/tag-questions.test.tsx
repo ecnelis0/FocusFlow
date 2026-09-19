@@ -24,6 +24,7 @@ function concept(mistakes: ConceptDetail["mistakes"] = []): ConceptDetail {
     body: null,
     subject: "Algebra",
     folder_id: null,
+  parent_id: null,
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: mistakes.length,

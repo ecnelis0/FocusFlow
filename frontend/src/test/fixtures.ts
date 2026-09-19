@@ -83,6 +83,7 @@ export function makeConcept(overrides: Partial<Concept> = {}): Concept {
     body: null,
     subject: "Math",
     folder_id: null,
+    parent_id: null,
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: 0,

@@ -59,7 +59,10 @@ interface QuestionDraft {
   keep: boolean;
 }
 
-function toQuestionDraft(question: ProposedQuestion, index: number): QuestionDraft {
+function toQuestionDraft(
+  question: ProposedQuestion,
+  index: number,
+): QuestionDraft {
   return {
     id: `q${index}-${question.question_text}`,
     question_text: question.question_text,
@@ -70,6 +73,37 @@ function toQuestionDraft(question: ProposedQuestion, index: number): QuestionDra
     origin: question.origin ?? "material",
     keep: true,
   };
+}
+
+/** The proposal in map order: each branch, then the details that hang off it.
+ *
+ *  The model is asked for parents before children and usually obliges, but
+ *  "usually" is not an order — and a list where a detail floats three cards away
+ *  from the concept it belongs to hides the one thing this pass is for. Anything
+ *  whose parent is not in the list is a branch here, exactly as the map draws it. */
+function inMapOrder(drafts: Draft[]): Draft[] {
+  const titles = new Set(drafts.map((draft) => draft.title));
+  const children = new Map<string, Draft[]>();
+  const branches: Draft[] = [];
+
+  for (const draft of drafts) {
+    const parent = draft.parent_title;
+    if (parent && parent !== draft.title && titles.has(parent)) {
+      const siblings = children.get(parent);
+      if (siblings) siblings.push(draft);
+      else children.set(parent, [draft]);
+    } else {
+      branches.push(draft);
+    }
+  }
+
+  const ordered = branches.flatMap((branch) => [
+    branch,
+    ...(children.get(branch.title) ?? []),
+  ]);
+  // Anything left is caught in a cycle. Append it rather than lose it.
+  const seen = new Set(ordered.map((draft) => draft.id));
+  return [...ordered, ...drafts.filter((draft) => !seen.has(draft.id))];
 }
 
 function toDraft(concept: ProposedConcept, index: number): Draft {
@@ -93,7 +127,8 @@ function useRecorder(onDone: (file: File) => void) {
   const [seconds, setSeconds] = useState(0);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
-  const supported = typeof window !== "undefined" && recordingMimeType() !== null;
+  const supported =
+    typeof window !== "undefined" && recordingMimeType() !== null;
 
   useEffect(() => {
     if (!recording) return;
@@ -114,7 +149,9 @@ function useRecorder(onDone: (file: File) => void) {
       media.onstop = () => {
         for (const track of stream.getTracks()) track.stop();
         const blob = new Blob(chunks.current, { type: mimeType });
-        onDone(new File([blob], recordingFilename(mimeType), { type: mimeType }));
+        onDone(
+          new File([blob], recordingFilename(mimeType), { type: mimeType }),
+        );
         setRecording(false);
       };
       recorder.current = media;
@@ -122,7 +159,9 @@ function useRecorder(onDone: (file: File) => void) {
       media.start();
       setRecording(true);
     } catch {
-      toast.error("Could not use the microphone. Check the browser's permission for this site.");
+      toast.error(
+        "Could not use the microphone. Check the browser's permission for this site.",
+      );
     }
   };
 
@@ -150,7 +189,10 @@ export function CaptureForm() {
   // model is the exception, so the fields are what costs a click, not the prose.
   const [editing, setEditing] = useState<ReadonlySet<string>>(new Set());
 
-  const { data: concepts } = useQuery({ queryKey: keys.concepts(), queryFn: api.listConcepts });
+  const { data: concepts } = useQuery({
+    queryKey: keys.concepts(),
+    queryFn: api.listConcepts,
+  });
   const subjects = Array.from(
     new Set((concepts ?? []).map((concept) => concept.subject).filter(Boolean)),
   ) as string[];
@@ -165,7 +207,7 @@ export function CaptureForm() {
     onSuccess: (proposed) => {
       setResult(null);
       setProposal(proposed);
-      setDrafts(proposed.concepts.map(toDraft));
+      setDrafts(inMapOrder(proposed.concepts.map(toDraft)));
       setQuestionDrafts((proposed.questions ?? []).map(toQuestionDraft));
       setEditing(new Set());
       setShowTranscript(false);
@@ -192,10 +234,16 @@ export function CaptureForm() {
             title: draft.title.trim(),
             body: draft.body.trim(),
             subject: draft.subject.trim() || null,
+            parent_title: draft.parent_title,
             existing_id: draft.merge ? draft.existing_id : null,
           })),
         questions: questionDrafts
-          .filter((draft) => draft.keep && draft.question_text.trim() && draft.correct_answer.trim())
+          .filter(
+            (draft) =>
+              draft.keep &&
+              draft.question_text.trim() &&
+              draft.correct_answer.trim(),
+          )
           .map((draft) => ({
             question_text: draft.question_text.trim(),
             choices: draft.choices
@@ -234,7 +282,9 @@ export function CaptureForm() {
       const asked = outcome.questions?.length ?? 0;
       toast.success(
         `Filed ${count} concept${count === 1 ? "" : "s"}` +
-          (asked > 0 ? ` and ${asked} question${asked === 1 ? "" : "s"}.` : "."),
+          (asked > 0
+            ? ` and ${asked} question${asked === 1 ? "" : "s"}.`
+            : "."),
       );
     },
     onError: (error: Error) => toast.error(error.message),
@@ -257,19 +307,28 @@ export function CaptureForm() {
 
   const updateQuestion = (id: string, patch: Partial<QuestionDraft>) =>
     setQuestionDrafts((current) =>
-      current.map((draft) => (draft.id === id ? { ...draft, ...patch } : draft)),
+      current.map((draft) =>
+        draft.id === id ? { ...draft, ...patch } : draft,
+      ),
     );
   const keptQuestions = questionDrafts.filter(
-    (draft) => draft.keep && draft.question_text.trim() && draft.correct_answer.trim(),
+    (draft) =>
+      draft.keep && draft.question_text.trim() && draft.correct_answer.trim(),
   ).length;
   // Where a question can be filed: the concepts on this proposal that are kept.
-  const conceptTitles = drafts.filter((draft) => draft.keep).map((draft) => draft.title.trim());
+  const conceptTitles = drafts
+    .filter((draft) => draft.keep)
+    .map((draft) => draft.title.trim());
 
   const updateDraft = (id: string, patch: Partial<Draft>) =>
     setDrafts((current) =>
-      current.map((draft) => (draft.id === id ? { ...draft, ...patch } : draft)),
+      current.map((draft) =>
+        draft.id === id ? { ...draft, ...patch } : draft,
+      ),
     );
-  const kept = drafts.filter((draft) => draft.keep && draft.title.trim()).length;
+  const kept = drafts.filter(
+    (draft) => draft.keep && draft.title.trim(),
+  ).length;
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: CAPTURE_TYPES,
@@ -308,11 +367,16 @@ export function CaptureForm() {
             aria-label="Drop notes here, or click to choose a file"
             className={cn(
               "flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-8 text-center transition-colors",
-              isDragActive ? "border-primary bg-primary/5" : "hover:bg-muted/50",
-              (send.isPending || recorder.recording) && "pointer-events-none opacity-50",
+              isDragActive
+                ? "border-primary bg-primary/5"
+                : "hover:bg-muted/50",
+              (send.isPending || recorder.recording) &&
+                "pointer-events-none opacity-50",
             )}
           >
-            <input {...getInputProps({ "aria-label": "Choose a file of notes" })} />
+            <input
+              {...getInputProps({ "aria-label": "Choose a file of notes" })}
+            />
             {file ? (
               <p className="text-sm">
                 <span className="font-medium">{describe(file)}</span>
@@ -323,7 +387,9 @@ export function CaptureForm() {
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">
-                  {isDragActive ? "Drop it here" : "Drag notes here, or click to choose"}
+                  {isDragActive
+                    ? "Drop it here"
+                    : "Drag notes here, or click to choose"}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   PNG, JPEG, WebP, HEIC, PDF, TXT, or MP3, M4A, WAV, WebM
@@ -335,7 +401,11 @@ export function CaptureForm() {
           <div className="flex flex-wrap items-center gap-2">
             {recorder.supported ? (
               recorder.recording ? (
-                <Button type="button" variant="destructive" onClick={recorder.stop}>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={recorder.stop}
+                >
                   Stop recording · {Math.floor(recorder.seconds / 60)}:
                   {String(recorder.seconds % 60).padStart(2, "0")}
                 </Button>
@@ -355,7 +425,11 @@ export function CaptureForm() {
               </p>
             )}
             {file && !recorder.recording && (
-              <Button type="button" variant="ghost" onClick={() => setFile(null)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setFile(null)}
+              >
                 Remove file
               </Button>
             )}
@@ -393,7 +467,11 @@ export function CaptureForm() {
           )}
         </Section>
 
-        <FolderPicker id="capture-folder" value={folderId} onChange={setFolderId} />
+        <FolderPicker
+          id="capture-folder"
+          value={folderId}
+          onChange={setFolderId}
+        />
 
         {/* Only when there is no folder to file into. A subject and a folder are
             two ways of saying where this goes, and offering both is how they end
@@ -435,158 +513,200 @@ export function CaptureForm() {
       {proposal && (
         <Section
           title="Check before filing"
-          description={proposal.title ? `${proposal.title} — ${proposal.summary}` : proposal.summary}
+          description={
+            proposal.title
+              ? `${proposal.title} — ${proposal.summary}`
+              : proposal.summary
+          }
           actions={
             <span className="text-xs text-muted-foreground">
-              read by {proposal.extractor} · from your {KIND_LABELS[proposal.kind]}
+              read by {proposal.extractor} · from your{" "}
+              {KIND_LABELS[proposal.kind]}
             </span>
           }
         >
           {drafts.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nothing in there looked like a concept worth keeping. Try a clearer photo,
-              or paste the part that matters.
+              Nothing in there looked like a concept worth keeping. Try a
+              clearer photo, or paste the part that matters.
             </p>
           ) : (
             <>
               <ul className="space-y-3">
-                {drafts.map((draft, index) => (
-                  <li key={draft.id}>
-                    <Panel className={cn(!draft.keep && "opacity-50")}>
-                      <div className="space-y-3 px-4 py-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <label className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                checked={draft.keep}
-                                aria-label={`Keep concept ${index + 1}`}
-                                onChange={(event) =>
-                                  updateDraft(draft.id, { keep: event.target.checked })
-                                }
-                              />
-                              <span className="text-xs text-muted-foreground">
-                                {index + 1} of {drafts.length}
-                              </span>
-                            </label>
-                            {draft.where && (
-                              <span className="text-xs text-muted-foreground">{draft.where}</span>
-                            )}
-                            {draft.subject && !editing.has(draft.id) && (
-                              <span className="text-xs text-muted-foreground">
-                                {draft.subject}
-                              </span>
-                            )}
-                          </div>
-                          {/* One name per button, not six called "Edit": a duplicate
+                {drafts.map((draft, index) => {
+                  // A detail is indented under the branch above it, and names it:
+                  // the indent alone is a guess once a card is tall enough to push
+                  // its branch off the top of the screen.
+                  const under =
+                    draft.parent_title && draft.parent_title !== draft.title
+                      ? drafts.find(
+                          (other) => other.title === draft.parent_title,
+                        )
+                      : undefined;
+                  return (
+                    <li
+                      key={draft.id}
+                      className={cn(under && "ml-6 border-l pl-4 sm:ml-9")}
+                    >
+                      <Panel className={cn(!draft.keep && "opacity-50")}>
+                        <div className="space-y-3 px-4 py-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={draft.keep}
+                                  aria-label={`Keep concept ${index + 1}`}
+                                  onChange={(event) =>
+                                    updateDraft(draft.id, {
+                                      keep: event.target.checked,
+                                    })
+                                  }
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                  {index + 1} of {drafts.length}
+                                </span>
+                              </label>
+                              {draft.where && (
+                                <span className="text-xs text-muted-foreground">
+                                  {draft.where}
+                                </span>
+                              )}
+                              {under && (
+                                <span className="text-xs text-muted-foreground">
+                                  under {under.title}
+                                </span>
+                              )}
+                              {draft.subject && !editing.has(draft.id) && (
+                                <span className="text-xs text-muted-foreground">
+                                  {draft.subject}
+                                </span>
+                              )}
+                            </div>
+                            {/* One name per button, not six called "Edit": a duplicate
                               accessible name is a bug, and the index is what tells
                               them apart. */}
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            aria-label={
-                              editing.has(draft.id)
-                                ? `Stop editing concept ${index + 1}`
-                                : `Edit concept ${index + 1}`
-                            }
-                            aria-expanded={editing.has(draft.id)}
-                            disabled={!draft.keep || approve.isPending}
-                            onClick={() => toggleEditing(draft.id)}
-                          >
-                            {editing.has(draft.id) ? "Done" : "Edit"}
-                          </Button>
-                        </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              aria-label={
+                                editing.has(draft.id)
+                                  ? `Stop editing concept ${index + 1}`
+                                  : `Edit concept ${index + 1}`
+                              }
+                              aria-expanded={editing.has(draft.id)}
+                              disabled={!draft.keep || approve.isPending}
+                              onClick={() => toggleEditing(draft.id)}
+                            >
+                              {editing.has(draft.id) ? "Done" : "Edit"}
+                            </Button>
+                          </div>
 
-                        {/* Read first, edit second. What the model made of the
+                          {/* Read first, edit second. What the model made of the
                             material is something to understand before it is
                             something to correct, and a page of form fields is the
                             one shape that cannot be read. */}
-                        {editing.has(draft.id) ? (
-                          <>
-                            <div>
-                              <Label htmlFor={`draft-title-${index}`}>Concept</Label>
-                              <Input
-                                id={`draft-title-${index}`}
-                                className="mt-1"
-                                value={draft.title}
-                                disabled={!draft.keep || approve.isPending}
-                                onChange={(event) =>
-                                  updateDraft(draft.id, { title: event.target.value })
-                                }
-                              />
-                            </div>
+                          {editing.has(draft.id) ? (
+                            <>
+                              <div>
+                                <Label htmlFor={`draft-title-${index}`}>
+                                  Concept
+                                </Label>
+                                <Input
+                                  id={`draft-title-${index}`}
+                                  className="mt-1"
+                                  value={draft.title}
+                                  disabled={!draft.keep || approve.isPending}
+                                  onChange={(event) =>
+                                    updateDraft(draft.id, {
+                                      title: event.target.value,
+                                    })
+                                  }
+                                />
+                              </div>
 
-                            <div>
-                              <Label htmlFor={`draft-body-${index}`}>Description</Label>
-                              <Textarea
-                                id={`draft-body-${index}`}
-                                className="mt-1"
-                                rows={4}
-                                value={draft.body}
-                                disabled={!draft.keep || approve.isPending}
-                                onChange={(event) =>
-                                  updateDraft(draft.id, { body: event.target.value })
-                                }
-                              />
-                            </div>
+                              <div>
+                                <Label htmlFor={`draft-body-${index}`}>
+                                  Description
+                                </Label>
+                                <Textarea
+                                  id={`draft-body-${index}`}
+                                  className="mt-1"
+                                  rows={4}
+                                  value={draft.body}
+                                  disabled={!draft.keep || approve.isPending}
+                                  onChange={(event) =>
+                                    updateDraft(draft.id, {
+                                      body: event.target.value,
+                                    })
+                                  }
+                                />
+                              </div>
 
-                            <div>
-                              <Label htmlFor={`draft-subject-${index}`}>Subject</Label>
-                              <Input
-                                id={`draft-subject-${index}`}
-                                className="mt-1 max-w-xs"
-                                list="capture-subjects"
-                                value={draft.subject}
-                                disabled={!draft.keep || approve.isPending}
-                                onChange={(event) =>
-                                  updateDraft(draft.id, { subject: event.target.value })
-                                }
-                              />
+                              <div>
+                                <Label htmlFor={`draft-subject-${index}`}>
+                                  Subject
+                                </Label>
+                                <Input
+                                  id={`draft-subject-${index}`}
+                                  className="mt-1 max-w-xs"
+                                  list="capture-subjects"
+                                  value={draft.subject}
+                                  disabled={!draft.keep || approve.isPending}
+                                  onChange={(event) =>
+                                    updateDraft(draft.id, {
+                                      subject: event.target.value,
+                                    })
+                                  }
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <h3 className="text-base font-medium tracking-[-0.01em]">
+                                {draft.title || "Untitled"}
+                              </h3>
+                              {draft.body.trim() ? (
+                                <p className="text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
+                                  {draft.body}
+                                </p>
+                              ) : (
+                                <p className="text-sm text-muted-foreground italic">
+                                  No description came back for this one. Edit it
+                                  to write your own.
+                                </p>
+                              )}
                             </div>
-                          </>
-                        ) : (
-                          <div className="space-y-1.5">
-                            <h3 className="text-base font-medium tracking-[-0.01em]">
-                              {draft.title || "Untitled"}
-                            </h3>
-                            {draft.body.trim() ? (
-                              <p className="text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
-                                {draft.body}
-                              </p>
-                            ) : (
-                              <p className="text-sm text-muted-foreground italic">
-                                No description came back for this one. Edit it to write your
-                                own.
-                              </p>
-                            )}
-                          </div>
-                        )}
+                          )}
 
-                        {/* Merging is a decision about where this lands, so it stays
+                          {/* Merging is a decision about where this lands, so it stays
                             visible while reading rather than hiding behind Edit. */}
-                        {draft.existing_id && (
-                          <label className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={draft.merge}
-                              disabled={!draft.keep || approve.isPending}
-                              onChange={(event) =>
-                                updateDraft(draft.id, { merge: event.target.checked })
-                              }
-                            />
-                            <span>
-                              Add to existing{" "}
-                              <span className="font-medium">
-                                &ldquo;{draft.existing_title}&rdquo;
+                          {draft.existing_id && (
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={draft.merge}
+                                disabled={!draft.keep || approve.isPending}
+                                onChange={(event) =>
+                                  updateDraft(draft.id, {
+                                    merge: event.target.checked,
+                                  })
+                                }
+                              />
+                              <span>
+                                Add to existing{" "}
+                                <span className="font-medium">
+                                  &ldquo;{draft.existing_title}&rdquo;
+                                </span>
                               </span>
-                            </span>
-                          </label>
-                        )}
-                      </div>
-                    </Panel>
-                  </li>
-                ))}
+                            </label>
+                          )}
+                        </div>
+                      </Panel>
+                    </li>
+                  );
+                })}
               </ul>
             </>
           )}
@@ -610,7 +730,9 @@ export function CaptureForm() {
                               checked={draft.keep}
                               aria-label={`Keep question ${index + 1}`}
                               onChange={(event) =>
-                                updateQuestion(draft.id, { keep: event.target.checked })
+                                updateQuestion(draft.id, {
+                                  keep: event.target.checked,
+                                })
                               }
                             />
                             <span className="text-xs text-muted-foreground">
@@ -618,7 +740,9 @@ export function CaptureForm() {
                             </span>
                           </label>
                           {draft.where && (
-                            <span className="text-xs text-muted-foreground">{draft.where}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {draft.where}
+                            </span>
                           )}
                           {draft.origin === "generated" && (
                             <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
@@ -627,7 +751,9 @@ export function CaptureForm() {
                           )}
                         </div>
                         <div>
-                          <Label htmlFor={`question-text-${index}`}>Question</Label>
+                          <Label htmlFor={`question-text-${index}`}>
+                            Question
+                          </Label>
                           <Textarea
                             id={`question-text-${index}`}
                             className="mt-1"
@@ -635,14 +761,20 @@ export function CaptureForm() {
                             value={draft.question_text}
                             disabled={!draft.keep || approve.isPending}
                             onChange={(event) =>
-                              updateQuestion(draft.id, { question_text: event.target.value })
+                              updateQuestion(draft.id, {
+                                question_text: event.target.value,
+                              })
                             }
                           />
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div>
-                            <Label htmlFor={`question-choices-${index}`}>Choices</Label>
-                            <p className="text-xs text-muted-foreground">One per line; leave empty for a typed answer.</p>
+                            <Label htmlFor={`question-choices-${index}`}>
+                              Choices
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              One per line; leave empty for a typed answer.
+                            </p>
                             <Textarea
                               id={`question-choices-${index}`}
                               className="mt-1"
@@ -650,36 +782,50 @@ export function CaptureForm() {
                               value={draft.choices}
                               disabled={!draft.keep || approve.isPending}
                               onChange={(event) =>
-                                updateQuestion(draft.id, { choices: event.target.value })
+                                updateQuestion(draft.id, {
+                                  choices: event.target.value,
+                                })
                               }
                             />
                           </div>
                           <div className="space-y-3">
                             <div>
-                              <Label htmlFor={`question-answer-${index}`}>Answer</Label>
+                              <Label htmlFor={`question-answer-${index}`}>
+                                Answer
+                              </Label>
                               <Input
                                 id={`question-answer-${index}`}
                                 className="mt-1"
                                 value={draft.correct_answer}
                                 disabled={!draft.keep || approve.isPending}
                                 onChange={(event) =>
-                                  updateQuestion(draft.id, { correct_answer: event.target.value })
+                                  updateQuestion(draft.id, {
+                                    correct_answer: event.target.value,
+                                  })
                                 }
                               />
                             </div>
                             <div>
-                              <Label htmlFor={`question-concept-${index}`}>Under concept</Label>
+                              <Label htmlFor={`question-concept-${index}`}>
+                                Under concept
+                              </Label>
                               <select
                                 id={`question-concept-${index}`}
                                 className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
                                 value={draft.concept_title}
                                 disabled={!draft.keep || approve.isPending}
                                 onChange={(event) =>
-                                  updateQuestion(draft.id, { concept_title: event.target.value })
+                                  updateQuestion(draft.id, {
+                                    concept_title: event.target.value,
+                                  })
                                 }
                               >
-                                {!conceptTitles.includes(draft.concept_title) && (
-                                  <option value={draft.concept_title}>{draft.concept_title}</option>
+                                {!conceptTitles.includes(
+                                  draft.concept_title,
+                                ) && (
+                                  <option value={draft.concept_title}>
+                                    {draft.concept_title}
+                                  </option>
                                 )}
                                 {conceptTitles.map((title) => (
                                   <option key={title} value={title}>
@@ -702,7 +848,9 @@ export function CaptureForm() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
-              disabled={(kept === 0 && keptQuestions === 0) || approve.isPending}
+              disabled={
+                (kept === 0 && keptQuestions === 0) || approve.isPending
+              }
               onClick={() => approve.mutate()}
             >
               {approve.isPending
@@ -712,7 +860,12 @@ export function CaptureForm() {
                     ? ` and ${keptQuestions} question${keptQuestions === 1 ? "" : "s"}`
                     : "")}
             </Button>
-            <Button type="button" variant="ghost" disabled={approve.isPending} onClick={discard}>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={approve.isPending}
+              onClick={discard}
+            >
               Discard
             </Button>
           </div>
@@ -748,24 +901,31 @@ export function CaptureForm() {
               </p>
               <ul className="mt-2 space-y-1">
                 {result.questions.map((question) => (
-                  <li key={question.id} className="flex flex-wrap gap-x-2 text-muted-foreground">
+                  <li
+                    key={question.id}
+                    className="flex flex-wrap gap-x-2 text-muted-foreground"
+                  >
                     <Link href={`/bank/${question.id}`} className="underline">
                       {question.question_text.length > 90
                         ? `${question.question_text.slice(0, 90)}…`
                         : question.question_text}
                     </Link>
                     {question.concepts.length > 0 && (
-                      <span>· {question.concepts.map((c) => c.title).join(", ")}</span>
+                      <span>
+                        · {question.concepts.map((c) => c.title).join(", ")}
+                      </span>
                     )}
                   </li>
                 ))}
               </ul>
               <p className="mt-2 text-xs text-muted-foreground">
-                They are on the ladder now: the first comes round in Review in an hour.
+                They are on the ladder now: the first comes round in Review in
+                an hour.
               </p>
             </div>
           )}
-          {result.changes.length === 0 && (!result.questions || result.questions.length === 0) ? (
+          {result.changes.length === 0 &&
+          (!result.questions || result.questions.length === 0) ? (
             <p className="text-sm text-muted-foreground">Nothing was filed.</p>
           ) : (
             <ul className="space-y-2">
@@ -786,7 +946,9 @@ export function CaptureForm() {
                               : "border-border text-muted-foreground",
                           )}
                         >
-                          {change.action === "created" ? "new" : "added to existing"}
+                          {change.action === "created"
+                            ? "new"
+                            : "added to existing"}
                         </span>
                         {change.concept.subject && (
                           <span className="text-xs text-muted-foreground">
