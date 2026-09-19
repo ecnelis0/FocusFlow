@@ -111,7 +111,9 @@ test("deleting a folder keeps the question, in the subject, unfiled", async ({ p
   await expect(page.getByText(question)).toBeVisible();
 });
 
-test("notes scanned into a chosen folder land in it, concepts and questions alike", async ({
+// Pasted text with no question in it, so this covers the concepts half only; the
+// file-upload spec below is the one that proves questions take the folder too.
+test("pasted notes land in the folder chosen before the reading", async ({
   page,
 }) => {
   const subject = stamped("Chemistry");
@@ -185,4 +187,68 @@ test("a folder can be made on the study page, and the material files straight in
   const card = page.getByRole("button", { name: `Open ${folder}` });
   await expect(card).toBeVisible();
   await expect(card).not.toContainText("0 concepts");
+});
+
+test("a file uploaded into a chosen folder lands there, concepts and questions alike", async ({
+  page,
+}) => {
+  // The headline flow: pick a folder that already exists, hand over a file, and
+  // have both halves of what comes out of it filed in that one place.
+  const subject = stamped("Biology");
+  const folder = stamped("Unit 1: Cells");
+  const stamp = Date.now() % 1000000;
+  const osmosis = `Osmosis ${stamp}`;
+  const diffusion = `Diffusion ${stamp}`;
+  const asked = `Which way does water move in osmosis ${stamp}?`;
+
+  await addSubject(page, subject);
+  await addFolder(page, subject, folder);
+
+  await page.goto("/");
+  await page.getByLabel("Choose a file of notes").setInputFiles({
+    name: "biology-notes.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from(
+      `${osmosis}: water moves toward the higher solute concentration.\n` +
+        `${asked} Answer: Toward the higher solute concentration.\n\n` +
+        `${diffusion}: particles spread from high to low concentration.\n` +
+        `What drives diffusion ${stamp}? Answer: The concentration gradient.\n`,
+    ),
+  });
+  await expect(page.getByText("biology-notes.txt")).toBeVisible();
+
+  await page.getByLabel("File it into").selectOption({ label: folder });
+  await page.getByRole("button", { name: "Scan for concepts" }).click();
+
+  // Both halves are proposed: the concepts to read, and the questions to answer later.
+  await expect(page.getByRole("heading", { name: osmosis })).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.getByRole("heading", { name: diffusion })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Practice questions" }),
+  ).toBeVisible();
+  // exact: "Question" is a substring of the "Keep question 1" checkbox beside it.
+  await expect(page.getByLabel("Question", { exact: true }).first()).toHaveValue(
+    new RegExp(asked),
+  );
+
+  await page
+    .getByRole("button", { name: "Approve and log 2 concepts and 2 questions" })
+    .click();
+  await expect(page.getByText(/Filed 2 concepts and 2 questions/)).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // The folder's own counts are the proof, not the toast that said it worked.
+  await page.goto("/bank");
+  await page.getByRole("tab", { name: new RegExp(`^${subject} `) }).click();
+  const card = page.getByRole("button", { name: `Open ${folder}` });
+  await expect(card).toContainText("2 questions");
+  await expect(card).toContainText("2 concepts");
+
+  // And opening it shows the question that came out of the file.
+  await card.click();
+  await expect(page).toHaveURL(/folder=/);
+  await expect(page.getByRole("main").getByText(asked)).toBeVisible({ timeout: 10_000 });
 });
