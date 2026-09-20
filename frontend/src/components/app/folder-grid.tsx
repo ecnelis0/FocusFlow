@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -79,6 +80,7 @@ export function FolderGrid({
             name={folder.name}
             questions={folder.question_count}
             concepts={folder.concept_count}
+            href={`/folders/${folder.id}`}
             active={selected === folder.id}
             onOpen={() => onSelect(selected === folder.id ? null : folder.id)}
             onRemove={() => remove.mutate(folder)}
@@ -137,6 +139,7 @@ function FolderCard({
   concepts,
   active,
   muted = false,
+  href,
   onOpen,
   onRemove,
 }: {
@@ -145,6 +148,8 @@ function FolderCard({
   concepts: number;
   active: boolean;
   muted?: boolean;
+  /** The folder's own page, when it has one. "Not in a folder" does not. */
+  href?: string;
   onOpen: () => void;
   onRemove?: () => void;
 }) {
@@ -177,6 +182,20 @@ function FolderCard({
             {concepts === 1 ? "" : "s"}
           </span>
         </button>
+
+        {/* A link, not a button: it navigates, and `role="button"` would tell a
+            screen reader the wrong thing about what is going to happen. Named for
+            the folder, because "View" six times over is six identical names. */}
+        {href && (
+          <Link
+            href={href}
+            aria-label={`View everything in ${name}`}
+            title={`View everything in ${name}`}
+            className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100"
+          >
+            View
+          </Link>
+        )}
 
         {onRemove && (
           <button
