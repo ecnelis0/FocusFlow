@@ -36,7 +36,7 @@ def test_setting_the_provider_and_key_selects_the_real_one(reconfigure):
     assert type(analyzer).__name__ == "ClaudeAnalyzer"
     assert analyzer.name == "claude"
     # And it satisfies the whole contract, not just the part the log form uses.
-    assert all(hasattr(analyzer, m) for m in ("analyze", "interpret", "summarise"))
+    assert all(hasattr(analyzer, m) for m in ("interpret", "summarise"))
 
 
 def test_the_model_is_configurable_without_touching_code(reconfigure):

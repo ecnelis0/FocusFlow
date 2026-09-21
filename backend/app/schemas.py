@@ -6,8 +6,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import Difficulty, ErrorType, ReviewOutcome, Urgency
-
 
 def tidy_subject(value: str | None) -> str | None:
     """Trim a free-text subject; a blank one means "no subject", not an empty string.
@@ -103,71 +101,8 @@ class SubjectRead(BaseModel):
     unfiled_question_count: int = 0
 
 
-class MistakeCreate(BaseModel):
-    # Free text: "Biology", "Calculus", "Spanish". Optional, at most 80 characters.
-    # Ignored when `folder_id` is given: the folder decides the subject.
-    subject: str | None = Field(default=None, max_length=80)
-    # The topic folder to file this in. Sets `subject` to the folder's own.
-    folder_id: str | None = None
-    # Optional: say how badly this needs revisiting while you still remember. Left
-    # unset, the analyzer decides.
-    urgency: Urgency | None = None
-    question_text: str = Field(min_length=1)
-    your_answer: str = Field(min_length=1)
-    correct_answer: str = Field(min_length=1)
-    choices: list[str] | None = None
-    source: str | None = Field(default=None, max_length=200)
-    student_note: str | None = None
-    # Filed and labelled while you still remember, rather than only afterwards.
-    concept_ids: list[str] = Field(default_factory=list)
-    tags: list[str] = Field(default_factory=list)
-
-    @field_validator("tags")
-    @classmethod
-    def _tidy_tags(cls, values: list[str]) -> list[str]:
-        """Trim, drop blanks, and de-duplicate case-insensitively.
-
-        "By Mistake" and "by mistake" being two different tags would quietly split
-        every count and every filter in half.
-        """
-        seen: dict[str, str] = {}
-        for value in values:
-            tidy = " ".join(value.split())
-            if tidy and tidy.casefold() not in seen:
-                seen[tidy.casefold()] = tidy
-        return list(seen.values())
-
-    @field_validator("subject")
-    @classmethod
-    def _tidy_subject(cls, value: str | None) -> str | None:
-        return tidy_subject(value)
-
-    @field_validator("question_text", "your_answer", "correct_answer")
-    @classmethod
-    def _strip(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("must not be blank")
-        return stripped
-
-
-ANALYSIS_FIELDS = (
-    "error_type",
-    "topic",
-    "difficulty",
-    "urgency",
-    "why_wrong",
-    "correct_reasoning",
-    "takeaway",
-    "trap",
-)
-# Note: `tags` is deliberately not here. They are the student's own labels, not
-# something the analyzer writes, so relabelling a question must not mark its
-# analysis as edited - which would block a re-run behind a 409.
-
-
 class MistakeUpdate(BaseModel):
-    """Every field on a mistake is editable, including everything the AI wrote.
+    """Every field on a question is editable.
 
     All optional: only the keys actually sent are changed, so a form can save one
     field without having to round-trip the rest.
@@ -179,18 +114,9 @@ class MistakeUpdate(BaseModel):
     source: str | None = Field(default=None, max_length=200)
     question_text: str | None = None
     choices: list[str] | None = None
-    your_answer: str | None = None
     correct_answer: str | None = None
     student_note: str | None = None
-
-    error_type: ErrorType | None = None
     topic: str | None = Field(default=None, max_length=120)
-    difficulty: Difficulty | None = None
-    urgency: Urgency | None = None
-    why_wrong: str | None = None
-    correct_reasoning: str | None = None
-    takeaway: str | None = None
-    trap: str | None = None
     tags: list[str] | None = None
 
     @field_validator("tags")
@@ -210,7 +136,7 @@ class MistakeUpdate(BaseModel):
     def _tidy_subject(cls, value: str | None) -> str | None:
         return tidy_subject(value)
 
-    @field_validator("question_text", "your_answer", "correct_answer")
+    @field_validator("question_text", "correct_answer")
     @classmethod
     def _not_blanked(cls, value: str | None) -> str | None:
         if value is None:
@@ -219,9 +145,6 @@ class MistakeUpdate(BaseModel):
         if not stripped:
             raise ValueError("must not be blank")
         return stripped
-
-    def touches_analysis(self) -> bool:
-        return any(field in self.model_fields_set for field in ANALYSIS_FIELDS)
 
 
 class ConceptSummary(BaseModel):
@@ -316,18 +239,6 @@ class ImageRead(BaseModel):
     position: int
 
 
-class ReviewEventRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    cycle: int
-    step_index: int
-    interval_label: str
-    due_at: datetime
-    completed_at: datetime | None
-    outcome: ReviewOutcome | None
-
-
 class MistakeRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -338,98 +249,34 @@ class MistakeRead(BaseModel):
     source: str | None
     question_text: str
     choices: list[str] | None
-    your_answer: str
     correct_answer: str
     student_note: str | None
-
-    analysis_status: str
-    analysis_error: str | None
-    analyzed_at: datetime | None
-    analyzed_by: str | None
-    analysis_edited_at: datetime | None
-    error_type: ErrorType | None
     topic: str | None
-    difficulty: Difficulty | None
-    urgency: Urgency | None
-    urgency_is_yours: bool
-    why_wrong: str | None
-    correct_reasoning: str | None
-    takeaway: str | None
-    trap: str | None
     tags: list[str] | None
 
-    reviews: list[ReviewEventRead] = []
     concepts: list[ConceptSummary] = []
     images: list[ImageRead] = []
 
 
-class DueReview(BaseModel):
-    """A rung that is ready to be reviewed, with the question it belongs to."""
+class MaterialRead(BaseModel):
+    """One thing the student put in, as a folder lists it."""
 
-    review: ReviewEventRead
-    mistake: MistakeRead
+    model_config = ConfigDict(from_attributes=True)
 
-
-class ReviewComplete(BaseModel):
-    outcome: ReviewOutcome
-
-    @field_validator("outcome")
-    @classmethod
-    def _student_outcomes_only(cls, value: ReviewOutcome) -> ReviewOutcome:
-        if value is ReviewOutcome.superseded:
-            raise ValueError("'superseded' is set by the ladder, not by the student")
-        return value
-
-
-class ReviewCompleteResult(BaseModel):
-    review: ReviewEventRead
-    ladder_restarted: bool
-    next_due_at: datetime | None
-
-
-class ReviewAnswer(BaseModel):
-    """What the student typed or picked. The server decides if it is right."""
-
-    answer: str = Field(min_length=1)
-
-
-class ReviewAnswerResult(ReviewCompleteResult):
-    correct: bool
-    your_answer: str
-    correct_answer: str
-
-
-class SlotCount(BaseModel):
-    key: str
-    count: int
-
-
-class TopicCount(BaseModel):
-    """A topic reported with the subject it was logged under.
-
-    The subject is free text and optional, so it can be None: the topics of
-    questions logged with no subject are grouped together under it.
-    """
-
+    id: str
+    created_at: datetime
+    title: str
+    kind: str
+    source: str | None
+    summary: str | None
     subject: str | None
-    topic: str
-    count: int
+    folder_id: str | None
+    concept_count: int = 0
+    question_count: int = 0
 
 
-class Stats(BaseModel):
-    total_mistakes: int
-    due_now: int
-    # How many questions carry no concept at all - the number that makes the gap in
-    # the bank visible instead of something you notice by scrolling.
-    untagged_questions: int
-    reviews_completed: int
-    by_error_type: list[SlotCount]
-    by_urgency: list[SlotCount]
-    by_concept: list[SlotCount]
-    # Only questions that carry a subject; the rest are counted in total_mistakes.
-    by_subject: list[SlotCount]
-    topics: list[TopicCount]
+class MaterialDetail(MaterialRead):
+    """A material opened: everything that came out of that one upload."""
 
-
-ConceptRead.model_rebuild()
-ConceptDetail.model_rebuild()
+    concepts: list[ConceptRead] = []
+    questions: list[MistakeRead] = []

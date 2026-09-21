@@ -13,9 +13,7 @@ from datetime import date
 import httpx2
 import pytest
 
-from app.analysis.base import MistakeInput
 from app.analysis.claude import ClaudeAnalyzer
-from app.models import Difficulty, ErrorType, Urgency
 from app.query import BankQuery, Vocabulary
 from tests.fakes import anthropic_stub
 
@@ -35,36 +33,12 @@ def analyzer():
     )
 
 
-async def test_the_debrief_comes_back_validated(analyzer):
-    result = await analyzer.analyze(
-        MistakeInput(
-            subject="Math",
-            question_text="A circle has a circumference of 12π. What is its area?",
-            your_answer="12π",
-            correct_answer="36π",
-        )
-    )
-
-    # Not "a dict came back": the closed vocabularies really were satisfied.
-    assert result.error_type in set(ErrorType)
-    assert result.urgency in set(Urgency)
-    assert result.difficulty in set(Difficulty)
-    assert result.why_wrong and result.takeaway is not None
-
-
 async def test_the_request_is_the_shape_the_api_expects(analyzer):
-    await analyzer.analyze(
-        MistakeInput(
-            subject="Math",
-            question_text="q",
-            your_answer="1",
-            correct_answer="2",
-        )
-    )
+    await analyzer.interpret("my Math questions", TODAY, Vocabulary(subjects=["Math"]))
 
     sent = anthropic_stub.seen[-1]
     assert sent["model"] == "claude-opus-5"
-    assert "Subject: Math" in sent["messages"][0]["content"]
+    assert "my Math questions" in sent["messages"][0]["content"]
     # Adaptive thinking, not a budget_tokens config that current models reject.
     assert sent["thinking"] == {"type": "adaptive"}
     assert "budget_tokens" not in sent.get("thinking", {})
@@ -113,14 +87,13 @@ async def test_the_summary_is_plain_text(analyzer):
     assert "output_config" not in anthropic_stub.seen[-1]
 
 
-async def test_a_refusal_is_reported_rather_than_returned_as_an_analysis(analyzer, monkeypatch):
+async def test_a_refusal_is_reported_rather_than_returned_as_an_answer(analyzer, monkeypatch):
+    """A model that declines must raise, not hand back its refusal as the answer."""
     from app.analysis.base import AnalysisFailed
 
     monkeypatch.setattr(anthropic_stub, "STOP_REASON", "refusal")
     with pytest.raises(AnalysisFailed):
-        await analyzer.analyze(
-            MistakeInput(subject="Math", question_text="q", your_answer="1", correct_answer="2")
-        )
+        await analyzer.interpret("my Math questions", TODAY, Vocabulary(subjects=["Math"]))
 
 
 async def test_the_model_is_told_that_repetition_answers_a_consistency_question(analyzer):

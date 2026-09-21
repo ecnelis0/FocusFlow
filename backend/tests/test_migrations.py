@@ -188,13 +188,14 @@ def test_old_sections_become_readable_subjects(blank):
     db = sqlite3.connect(blank)
     try:
         mistakes = dict(db.execute("SELECT id, subject FROM mistakes ORDER BY id"))
-        errors = dict(db.execute("SELECT id, error_type FROM mistakes ORDER BY id"))
         concepts = dict(db.execute("SELECT id, subject FROM concepts ORDER BY id"))
     finally:
         db.close()
 
     assert mistakes == {"m1": "Math", "m2": "Reading & Writing", "m3": "Reading & Writing"}
-    assert errors == {"m1": "careless_arithmetic", "m2": "other", "m3": "other"}
+    # The old reading-and-writing error slots were remapped here too, but
+    # `error_type` has since been dropped with the rest of the review
+    # machinery, so at HEAD there is no column left to read it out of.
     assert concepts == {"c1": "Math", "c2": None}
     assert "section" not in columns(blank, "mistakes")
     assert "section" not in columns(blank, "concepts")

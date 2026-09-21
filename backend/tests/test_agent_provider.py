@@ -15,9 +15,8 @@ from typing import Any
 import pytest
 
 from app.analysis.agent import AgentAnalyzer, AgentExtractor
-from app.analysis.base import AnalysisFailed, MistakeInput
+from app.analysis.base import AnalysisFailed
 from app.analysis.extract import CaptureInput, ExistingConcept
-from app.models import ErrorType, Urgency
 from app.query import Vocabulary
 
 TODAY = date(2026, 9, 12)
@@ -62,37 +61,6 @@ def agent(monkeypatch):
 
     monkeypatch.setattr(claude_agent_sdk, "query", fake_query)
     return calls, replies
-
-
-ANALYSIS = {
-    "error_type": "concept_gap",
-    "topic": "circles",
-    "difficulty": "medium",
-    "urgency": "fundamental",
-    "why_wrong": "You used the circumference as the area.",
-    "correct_reasoning": "C = 2πr gives r = 6, so A = 36π.",
-    "takeaway": "Circumference gives you r first.",
-    "trap": "12π is what you get if you stop at r.",
-}
-
-
-async def test_analyze_uses_the_structured_schema_and_no_tools(agent):
-    calls, replies = agent
-    replies.append(FakeResult(structured_output=ANALYSIS))
-
-    result = await AgentAnalyzer("claude-opus-5").analyze(
-        MistakeInput(subject="Math", question_text="q", your_answer="12π", correct_answer="36π")
-    )
-
-    assert result.error_type is ErrorType.concept_gap
-    assert result.urgency is Urgency.fundamental
-    [call] = calls
-    options = call["options"]
-    assert options.model == "claude-opus-5"
-    assert options.allowed_tools == []
-    assert options.output_format["type"] == "json_schema"
-    assert "error_type" in options.output_format["schema"]["properties"]
-    assert "36π" in call["prompt"]
 
 
 async def test_interpret_hands_over_the_vocabulary_and_the_date(agent):
@@ -174,12 +142,11 @@ async def test_an_agent_error_is_an_analysis_failure(agent):
 
 
 async def test_output_that_breaks_the_schema_is_a_failure_not_a_crash(agent):
+    """A provider that returns nonsense must surface as a failure, not a traceback."""
     _, replies = agent
-    replies.append(FakeResult(structured_output={"error_type": "not_a_slot"}))
-    with pytest.raises(AnalysisFailed, match="did not validate"):
-        await AgentAnalyzer("claude-opus-5").analyze(
-            MistakeInput(question_text="q", your_answer="1", correct_answer="2")
-        )
+    replies.append(FakeResult(structured_output={"sort": "not_a_sort"}))
+    with pytest.raises(AnalysisFailed):
+        await AgentAnalyzer("claude-opus-5").interpret("show me everything", TODAY, Vocabulary())
 
 
 async def test_the_provider_is_selectable(monkeypatch):

@@ -13,8 +13,7 @@ from .config import get_settings
 from .images import upload_dir
 from .migrate import upgrade
 from .readiness import analyzer_ready
-from .review import LADDER_LABELS
-from .routers import ask, capture, concepts, images, mistakes, reviews, stats, subjects, tags
+from .routers import ask, capture, concepts, images, materials, mistakes, subjects, tags
 from .transcribe import transcriber_ready
 
 
@@ -48,8 +47,6 @@ app.mount(
 )
 
 app.include_router(mistakes.router)
-app.include_router(reviews.router)
-app.include_router(stats.router)
 app.include_router(tags.router)
 app.include_router(images.router)
 app.include_router(concepts.router)
@@ -57,6 +54,7 @@ app.include_router(subjects.router)
 app.include_router(subjects.folders_router)
 app.include_router(ask.router)
 app.include_router(capture.router)
+app.include_router(materials.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -77,7 +75,6 @@ async def health() -> dict:
         "analyzer": settings.ai_provider,
         "analyzer_ready": ready,
         "model": settings.anthropic_model if provider in ("claude", "agent") else None,
-        "ladder": list(LADDER_LABELS),
         "transcriber": transcriber_name,
         "transcriber_ready": transcriber_ok,
     }

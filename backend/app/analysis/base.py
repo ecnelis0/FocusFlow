@@ -1,7 +1,8 @@
 """The analyzer contract.
 
-Everything the student sees under "why I got this wrong" comes from an analyzer.
-The app never hand-authors that text; it only stores and organises what comes back.
+Two jobs remain: turning a question about the bank into a filter (`interpret`),
+and answering from the rows that filter matched (`summarise`). Reading material
+into concepts is the other half, and lives in `extract.py`.
 """
 
 from __future__ import annotations
@@ -9,70 +10,16 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from ..models import Difficulty, ErrorType, Urgency
-
 if TYPE_CHECKING:
     from ..query import BankQuery
 
 
-class MistakeInput(BaseModel):
-    """What an analyzer is given. Deliberately not the ORM object."""
-
-    subject: str | None = None
-    question_text: str
-    choices: list[str] | None = None
-    your_answer: str
-    correct_answer: str
-    source: str | None = None
-    student_note: str | None = None
-
-
-class MistakeAnalysis(BaseModel):
-    """What an analyzer must return. Doubles as the model's output schema."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    error_type: ErrorType = Field(
-        description="The single best-fitting reason this student got the question wrong."
-    )
-    topic: str = Field(
-        description="Short topic label, e.g. 'systems of linear equations' or "
-        "'cell respiration'. Title-free, lowercase, under 60 characters."
-    )
-    difficulty: Difficulty
-    urgency: Urgency = Field(
-        description="How badly this needs revisiting. 'fundamental' when the miss "
-        "exposes a hole in something the rest of the subject is built on; "
-        "'very_important' for a high-frequency skill or a trap they will meet again; "
-        "'important' otherwise. Judge the gap, not the question's difficulty."
-    )
-    why_wrong: str = Field(
-        description="Two to four sentences addressed to the student, explaining what "
-        "their specific answer suggests they did, not just that it was incorrect."
-    )
-    correct_reasoning: str = Field(
-        description="The correct route to the answer, in steps the student can follow."
-    )
-    takeaway: str = Field(
-        description="One sentence the student should remember next time they see this. "
-        "A rule, not a summary."
-    )
-    trap: str = Field(
-        description="What made the wrong answer attractive - the specific trap this "
-        "question sets. One or two sentences."
-    )
-
-
 class AnalysisFailed(RuntimeError):
-    """The analyzer could not produce an analysis. The mistake is still saved."""
+    """The analyzer could not answer. Raised by the extractor too."""
 
 
 class Analyzer(Protocol):
     name: str
-
-    async def analyze(self, mistake: MistakeInput) -> MistakeAnalysis: ...
 
     async def interpret(self, question: str, today: date) -> BankQuery:
         """Turn a question about the bank into a filter the database can run.
@@ -86,8 +33,8 @@ class Analyzer(Protocol):
         """Answer from the matched rows, with the whole bank as background.
 
         `digest` is what the filter matched and is what the answer is about;
-        `context` is everything else - every concept, every question, every review
-        - so "how does this compare" and "what else is under that concept" can be
+        `context` is everything else - every concept and every question - so
+        "how does this compare" and "what else is under that concept" can be
         answered without a second search.
         """
         ...

@@ -339,40 +339,14 @@ async def test_approved_questions_are_logged_and_tagged_under_their_concepts(cli
         c["concept"]["id"] for c in result.json()["changes"] if "Chain" in c["concept"]["title"]
     )
     for q in logged:
-        assert q["your_answer"] == "not attempted yet"
-        assert q["analysis_status"] == "not_requested"
         assert q["source"] == "Video: Derivatives, lecture 3"
         assert q["tags"] == ["practice"]
         assert [c["id"] for c in q["concepts"]] == [chain_id]
-        # On the ladder from now, so it comes round in Review.
-        assert len(q["reviews"]) == 5
 
     # Really in the bank, and the concept counts it.
     assert len((await client.get("/mistakes")).json()) == 2
     concept = (await client.get(f"/concepts/{chain_id}")).json()
     assert concept["question_count"] == 2
-
-    # And it is answerable in Review, marked by the server.
-    from datetime import timedelta
-
-    from sqlalchemy import update
-
-    from app.db import get_sessionmaker
-    from app.models import ReviewEvent, utcnow
-
-    async with get_sessionmaker()() as session:
-        await session.execute(
-            update(ReviewEvent)
-            .where(ReviewEvent.mistake_id == logged[0]["id"], ReviewEvent.step_index == 0)
-            .values(due_at=utcnow() - timedelta(minutes=1))
-        )
-        await session.commit()
-    due = (await client.get("/reviews/due")).json()
-    [item] = [d for d in due if d["mistake"]["id"] == logged[0]["id"]]
-    marked = await client.post(
-        f"/reviews/{item['review']['id']}/answer", json={"answer": "3 cos(3x)"}
-    )
-    assert marked.json()["correct"] is True
 
 
 async def test_every_concept_is_proposed_with_a_position_in_the_order(client):
@@ -458,3 +432,40 @@ async def test_a_concept_with_no_order_yet_can_be_given_one(client):
     filed = next(c for c in (await client.get("/concepts")).json() if c["title"] == "Osmosis")
     assert filed["sequence"] == 3
     assert filed["when_label"] == "Step 3"
+
+
+async def test_a_filed_questions_timestamp_survives_the_round_trip_as_utc(
+    client, session_factory
+):
+    """SQLite stores no offset; every timestamp must still come back UTC-aware.
+
+    `UtcDateTime` exists because a naive value read back from the database raises
+    the moment it meets a freshly built aware one. This used to be asserted on a
+    hand-logged mistake; capture is the only way a question is created now.
+    """
+    from datetime import datetime, timedelta
+
+    from app.models import Mistake
+
+    notes = "Osmosis: water follows solute.\nWhich way? Answer: Toward the solute."
+    proposal = (await client.post("/capture", data={"text": notes})).json()
+    result = await approve(client, proposal, questions=[
+        {
+            "question_text": q["question_text"],
+            "correct_answer": q["correct_answer"],
+            "concept_titles": [q["concept_title"]],
+            "origin": q["origin"],
+        }
+        for q in proposal["questions"]
+    ])
+    assert result["questions"], "the capture filed no question to check"
+    question_id = result["questions"][0]["id"]
+
+    async with session_factory() as session:
+        stored = await session.get(Mistake, question_id)
+        assert stored.created_at.tzinfo is not None
+        assert stored.created_at.utcoffset() == timedelta(0)
+
+    body = (await client.get(f"/mistakes/{question_id}")).json()
+    assert body["created_at"].endswith("Z") or body["created_at"].endswith("+00:00")
+    assert datetime.fromisoformat(body["created_at"]).tzinfo is not None

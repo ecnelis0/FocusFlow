@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from tests.conftest import MATH_MISTAKE
+from tests.conftest import MATH_MISTAKE, add_question
 
 
 def png(size=(60, 40), colour="red") -> bytes:
@@ -38,8 +38,8 @@ def uploads(tmp_path, monkeypatch):
     get_analyzer.cache_clear()
 
 
-async def _question(client) -> str:
-    return (await client.post("/mistakes", json=MATH_MISTAKE)).json()["id"]
+async def _question(session_factory) -> str:
+    return await add_question(session_factory, MATH_MISTAKE)
 
 
 async def _upload(client, mistake_id, data, name="shot.png", content_type="image/png"):
@@ -49,8 +49,8 @@ async def _upload(client, mistake_id, data, name="shot.png", content_type="image
     )
 
 
-async def test_a_picture_can_be_attached_to_a_question(client, uploads):
-    mistake_id = await _question(client)
+async def test_a_picture_can_be_attached_to_a_question(client, uploads, session_factory):
+    mistake_id = await _question(session_factory)
 
     response = await _upload(client, mistake_id, png())
 
@@ -65,8 +65,12 @@ async def test_a_picture_can_be_attached_to_a_question(client, uploads):
     assert (uploads / Path(image["url"]).name).exists()
 
 
-async def test_a_question_carries_its_pictures_wherever_it_is_read(client, uploads):
-    mistake_id = await _question(client)
+async def test_a_question_carries_its_pictures_wherever_it_is_read(
+    client,
+    uploads,
+    session_factory,
+):
+    mistake_id = await _question(session_factory)
     await _upload(client, mistake_id, png())
 
     assert len((await client.get(f"/mistakes/{mistake_id}")).json()["images"]) == 1
@@ -74,8 +78,8 @@ async def test_a_question_carries_its_pictures_wherever_it_is_read(client, uploa
     assert len((await client.post("/mistakes/search", json={})).json()[0]["images"]) == 1
 
 
-async def test_several_pictures_keep_the_order_they_were_added(client, uploads):
-    mistake_id = await _question(client)
+async def test_several_pictures_keep_the_order_they_were_added(client, uploads, session_factory):
+    mistake_id = await _question(session_factory)
     await _upload(client, mistake_id, png(size=(10, 10)), name="one.png")
     await _upload(client, mistake_id, png(size=(20, 20)), name="two.png")
     body = (await _upload(client, mistake_id, png(size=(30, 30)), name="three.png")).json()
@@ -84,8 +88,8 @@ async def test_several_pictures_keep_the_order_they_were_added(client, uploads):
     assert [image["position"] for image in body["images"]] == [0, 1, 2]
 
 
-async def test_jpegs_are_fine_too(client, uploads):
-    mistake_id = await _question(client)
+async def test_jpegs_are_fine_too(client, uploads, session_factory):
+    mistake_id = await _question(session_factory)
 
     body = (await _upload(client, mistake_id, jpeg(), name="photo.jpg")).json()
 
@@ -93,9 +97,13 @@ async def test_jpegs_are_fine_too(client, uploads):
     assert body["images"][0]["url"].endswith(".jpg")
 
 
-async def test_the_stored_name_is_generated_not_taken_from_the_upload(client, uploads):
+async def test_the_stored_name_is_generated_not_taken_from_the_upload(
+    client,
+    uploads,
+    session_factory,
+):
     """A client-supplied filename is how you get written outside the upload directory."""
-    mistake_id = await _question(client)
+    mistake_id = await _question(session_factory)
 
     body = (await _upload(client, mistake_id, png(), name="../../../etc/passwd.png")).json()
 
@@ -106,8 +114,8 @@ async def test_the_stored_name_is_generated_not_taken_from_the_upload(client, up
     assert [path.name for path in uploads.iterdir()] == [stored]
 
 
-async def test_a_file_that_is_not_an_image_is_refused(client, uploads):
-    mistake_id = await _question(client)
+async def test_a_file_that_is_not_an_image_is_refused(client, uploads, session_factory):
+    mistake_id = await _question(session_factory)
 
     response = await _upload(client, mistake_id, b"#!/bin/sh\nrm -rf /\n", name="evil.png")
 
@@ -116,9 +124,9 @@ async def test_a_file_that_is_not_an_image_is_refused(client, uploads):
     assert list(uploads.iterdir()) == [] if uploads.exists() else True
 
 
-async def test_the_declared_content_type_is_not_believed(client, uploads):
+async def test_the_declared_content_type_is_not_believed(client, uploads, session_factory):
     """The type comes from decoding the bytes, not from what the client claimed."""
-    mistake_id = await _question(client)
+    mistake_id = await _question(session_factory)
 
     body = (
         await _upload(client, mistake_id, jpeg(), name="lying.png", content_type="image/png")
@@ -127,19 +135,19 @@ async def test_the_declared_content_type_is_not_believed(client, uploads):
     assert body["images"][0]["content_type"] == "image/jpeg"
 
 
-async def test_an_empty_file_is_refused(client, uploads):
-    mistake_id = await _question(client)
+async def test_an_empty_file_is_refused(client, uploads, session_factory):
+    mistake_id = await _question(session_factory)
 
     response = await _upload(client, mistake_id, b"")
 
     assert response.status_code == 422
 
 
-async def test_an_oversized_image_is_refused(client, uploads, monkeypatch):
+async def test_an_oversized_image_is_refused(client, uploads, monkeypatch, session_factory):
     from app import images
 
     monkeypatch.setattr(images, "MAX_BYTES", 500)
-    mistake_id = await _question(client)
+    mistake_id = await _question(session_factory)
 
     response = await _upload(client, mistake_id, png(size=(400, 400), colour="white"))
 
@@ -147,8 +155,8 @@ async def test_an_oversized_image_is_refused(client, uploads, monkeypatch):
     assert "limit" in response.json()["detail"]
 
 
-async def test_deleting_a_picture_removes_the_row_and_the_file(client, uploads):
-    mistake_id = await _question(client)
+async def test_deleting_a_picture_removes_the_row_and_the_file(client, uploads, session_factory):
+    mistake_id = await _question(session_factory)
     body = (await _upload(client, mistake_id, png())).json()
     image = body["images"][0]
     path = uploads / Path(image["url"]).name
@@ -160,8 +168,8 @@ async def test_deleting_a_picture_removes_the_row_and_the_file(client, uploads):
     assert not path.exists()
 
 
-async def test_deleting_a_question_takes_its_pictures_with_it(client, uploads):
-    mistake_id = await _question(client)
+async def test_deleting_a_question_takes_its_pictures_with_it(client, uploads, session_factory):
+    mistake_id = await _question(session_factory)
     first = (await _upload(client, mistake_id, png(), name="a.png")).json()["images"][0]
     second = (await _upload(client, mistake_id, png(), name="b.png")).json()["images"][1]
     paths = [uploads / Path(image["url"]).name for image in (first, second)]
@@ -175,8 +183,12 @@ async def test_deleting_a_question_takes_its_pictures_with_it(client, uploads):
     assert not any(path.exists() for path in paths)
 
 
-async def test_you_cannot_attach_a_picture_to_someone_elses_question(client, uploads):
-    mistake_id = await _question(client)
+async def test_you_cannot_attach_a_picture_to_someone_elses_question(
+    client,
+    uploads,
+    session_factory,
+):
+    mistake_id = await _question(session_factory)
 
     response = await client.post(
         f"/mistakes/{mistake_id}/images",
@@ -189,8 +201,8 @@ async def test_you_cannot_attach_a_picture_to_someone_elses_question(client, upl
     assert not uploads.exists() or list(uploads.iterdir()) == []
 
 
-async def test_you_cannot_delete_someone_elses_picture(client, uploads):
-    mistake_id = await _question(client)
+async def test_you_cannot_delete_someone_elses_picture(client, uploads, session_factory):
+    mistake_id = await _question(session_factory)
     image = (await _upload(client, mistake_id, png())).json()["images"][0]
 
     response = await client.delete(
@@ -202,8 +214,8 @@ async def test_you_cannot_delete_someone_elses_picture(client, uploads):
     assert (uploads / Path(image["url"]).name).exists()
 
 
-async def test_deleting_an_image_that_is_not_there(client, uploads):
-    mistake_id = await _question(client)
+async def test_deleting_an_image_that_is_not_there(client, uploads, session_factory):
+    mistake_id = await _question(session_factory)
 
     response = await client.delete(f"/mistakes/{mistake_id}/images/deadbeef")
 

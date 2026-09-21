@@ -13,7 +13,7 @@ import anthropic
 import httpx2
 
 from ..query import BankQuery, Vocabulary
-from .base import AnalysisFailed, MistakeAnalysis, MistakeInput
+from .base import AnalysisFailed
 
 if TYPE_CHECKING:
     from .scan import ScanInput, ScannedQuestion
@@ -95,21 +95,6 @@ def summarise_prompt(question: str, digest: str, context: str) -> str:
     return "\n\n".join(parts)
 
 
-def _render(mistake: MistakeInput) -> str:
-    parts = [f"Subject: {mistake.subject}"] if mistake.subject else []
-    if mistake.source:
-        parts.append(f"Source: {mistake.source}")
-    parts.append(f"\nQuestion:\n{mistake.question_text}")
-    if mistake.choices:
-        rendered = "\n".join(f"{chr(65 + i)}. {choice}" for i, choice in enumerate(mistake.choices))
-        parts.append(f"\nChoices:\n{rendered}")
-    parts.append(f"\nThe student answered: {mistake.your_answer}")
-    parts.append(f"The correct answer is: {mistake.correct_answer}")
-    if mistake.student_note:
-        parts.append(f"\nThe student's own note: {mistake.student_note}")
-    return "\n".join(parts)
-
-
 class ClaudeAnalyzer:
     name = "claude"
 
@@ -130,28 +115,6 @@ class ClaudeAnalyzer:
             **({"base_url": base_url} if base_url else {}),
         )
         self._model = model
-
-    async def analyze(self, mistake: MistakeInput) -> MistakeAnalysis:
-        try:
-            response = await self._client.messages.parse(
-                model=self._model,
-                max_tokens=16000,
-                system=SYSTEM_PROMPT,
-                thinking={"type": "adaptive"},
-                messages=[{"role": "user", "content": _render(mistake)}],
-                output_format=MistakeAnalysis,
-            )
-        except anthropic.APIError as exc:  # network, rate limit, bad key, 5xx
-            raise AnalysisFailed(f"{type(exc).__name__}: {exc}") from exc
-
-        if response.stop_reason == "refusal":
-            detail = getattr(response.stop_details, "explanation", None) or "no explanation"
-            raise AnalysisFailed(f"model declined to answer ({detail})")
-
-        parsed = response.parsed_output
-        if parsed is None:
-            raise AnalysisFailed("model returned no structured output")
-        return parsed
 
     async def interpret(self, question: str, today: date, vocabulary: Vocabulary) -> BankQuery:
         try:

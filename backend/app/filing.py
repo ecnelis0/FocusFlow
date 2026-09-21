@@ -1,4 +1,4 @@
-"""Where a question or a concept is filed: its folder, and the subject name it implies.
+"""Where a question, a concept or a material is filed: its folder, and the subject name it implies.
 
 One module owns both fields because there are two of them for one fact. `folder_id`
 is the hierarchy - Subject > Folder - and `subject` is the folder's subject *name*,
@@ -24,7 +24,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .models import Concept, Folder, Mistake, Subject, new_id, utcnow
+from .models import Concept, Folder, Material, Mistake, Subject, new_id, utcnow
 
 
 def tidy(value: str | None) -> str | None:
@@ -148,7 +148,7 @@ async def reconcile_subjects(session: AsyncSession, user_id: str) -> None:
         await session.commit()
 
 
-def file_into(row: Concept | Mistake, folder: Folder | None) -> None:
+def file_into(row: Concept | Mistake | Material, folder: Folder | None) -> None:
     """Put a row in a folder, and give it that folder's subject name.
 
     Passing None unfiles it from its folder and leaves the subject alone: "this is
@@ -173,7 +173,7 @@ async def rename_subject(session: AsyncSession, user_id: str, subject: Subject, 
         return
     was = subject.name
     subject.name = clean
-    for model in (Mistake, Concept):
+    for model in (Mistake, Concept, Material):
         await session.execute(
             update(model)
             .where(model.user_id == user_id, func.lower(model.subject) == was.lower())
@@ -192,7 +192,7 @@ async def empty_folders(session: AsyncSession, user_id: str, folder_ids: list[st
     """
     if not folder_ids:
         return
-    for model in (Mistake, Concept):
+    for model in (Mistake, Concept, Material):
         await session.execute(
             update(model)
             .where(model.user_id == user_id, model.folder_id.in_(folder_ids))
@@ -206,7 +206,7 @@ async def unfile_subject(session: AsyncSession, user_id: str, subject: Subject) 
     The questions and concepts survive - only where they were filed is lost.
     """
     await empty_folders(session, user_id, [folder.id for folder in subject.folders])
-    for model in (Mistake, Concept):
+    for model in (Mistake, Concept, Material):
         await session.execute(
             update(model)
             .where(model.user_id == user_id, func.lower(model.subject) == subject.name.lower())

@@ -37,17 +37,16 @@ from ..filing import UnknownFolder, ensure_subject, file_into, resolve_folder
 from ..images import ALLOWED_FORMATS, MAX_BYTES, ImageRejected, store, upload_dir
 from ..images import delete as delete_file
 from ..models import (
-    AnalysisStatus,
     Concept,
     ConceptImage,
     Folder,
+    Material,
     Mistake,
     blank_collections,
     mistake_options,
     new_id,
     utcnow,
 )
-from ..review import build_ladder
 from ..schemas import ConceptRead, MistakeRead
 from ..transcribe import (
     AUDIO_TYPES,
@@ -148,12 +147,20 @@ class CaptureCommit(BaseModel):
     image_filename: str | None = None
     # Where the material came from, kept as each question's source.
     source: str | None = Field(default=None, max_length=200)
+    # What to call this material in the folder that now holds it. The page sends
+    # back the video's title or the file's name; blank falls back to the kind.
+    title: str | None = Field(default=None, max_length=200)
+    kind: str = Field(default="text", max_length=16)
+    # The extractor's summary of the whole thing, shown under the title.
+    summary: str | None = None
 
 
 class CaptureResult(BaseModel):
     changes: list[ConceptChange]
     # Practice questions logged into the bank, tagged under their concepts.
     questions: list[MistakeRead] = []
+    # The record of this capture, which is what a folder lists.
+    material_id: str | None = None
 
 
 class Sniffed(BaseModel):
@@ -295,6 +302,7 @@ async def _file(
     existing: list[Concept],
     image: bytes | None,
     folder: Folder | None = None,
+    material: Material | None = None,
 ) -> list[ConceptChange]:
     by_id = {concept.id: concept for concept in existing}
     by_title = {concept.title.casefold(): concept for concept in existing}
@@ -358,6 +366,11 @@ async def _file(
 
         if image is not None:
             _attach(target, image)
+        # Both halves of the branch link, created and merged alike: a concept a
+        # second video added to genuinely came out of both, and a folder that
+        # listed it under only the first would be lying about where to look.
+        if material is not None and target not in material.concepts:
+            material.concepts.append(target)
         changes.append(ConceptChange(concept=_read(target), action=action))
 
     # After the loop, never inside it: a concept may name a parent that appears
@@ -383,13 +396,9 @@ async def _log_questions(
     approved: list[ApprovedQuestion],
     source: str | None,
     folder: Folder | None = None,
+    material: Material | None = None,
 ) -> list[Mistake]:
-    """File practice questions as bank entries, tagged under their concepts.
-
-    They have not been attempted yet, so `your_answer` says so and no debrief is
-    asked for. The ladder starts now: the point of pulling them out of a video is
-    that they come round in Review, where the student answers and is marked.
-    """
+    """File practice questions, tagged under the concepts they exercise."""
     if not approved:
         return []
     concepts = {
@@ -411,15 +420,13 @@ async def _log_questions(
             created_at=logged_at,
             source=source,
             subject=subject,
+            material_id=material.id if material is not None else None,
             question_text=found.question_text.strip(),
             choices=[c for c in (found.choices or []) if c.strip()] or None,
-            your_answer="not attempted yet",
             correct_answer=found.correct_answer.strip(),
-            student_note="Practice question pulled from your notes; answer it in Review.",
-            analysis_status=AnalysisStatus.not_requested,
+            student_note="Practice question pulled from your material.",
             tags=["practice", "written for you"] if found.origin == "generated" else ["practice"],
         )
-        mistake.reviews.extend(build_ladder(mistake.id, logged_at))
         blank_collections(mistake)
         if folder is not None:
             file_into(mistake, folder)
@@ -590,10 +597,59 @@ async def commit(body: CaptureCommit, session: SessionDep, user_id: UserDep) -> 
     except UnknownFolder as exc:
         raise HTTPException(status_code=404, detail="No such folder") from exc
 
+    # The material row first, so the concepts and questions it produces can point
+    # at it in the same transaction. Created even when the capture is only
+    # concepts: "what did I put in here" is the question a folder has to answer,
+    # and a capture that filed no question is still something you put in.
+    material = Material(
+        id=new_id(),
+        user_id=user_id,
+        created_at=utcnow(),
+        title=_material_title(body),
+        kind=" ".join(body.kind.split())[:16] or "text",
+        source=body.source,
+        summary=(body.summary or "").strip() or None,
+    )
+    material.concepts = []
+    material.questions = []
+    if folder is not None:
+        file_into(material, folder)
+    else:
+        await ensure_subject(session, user_id, material.subject)
+    session.add(material)
+    await session.flush()
+
     existing = await _existing(session, user_id)
-    changes = await _file(session, user_id, body.concepts, existing, image=image, folder=folder)
-    questions = await _log_questions(session, user_id, body.questions, body.source, folder=folder)
-    return CaptureResult(changes=changes, questions=questions)
+    changes = await _file(
+        session, user_id, body.concepts, existing, image=image, folder=folder, material=material
+    )
+    questions = await _log_questions(
+        session, user_id, body.questions, body.source, folder=folder, material=material
+    )
+    return CaptureResult(changes=changes, questions=questions, material_id=material.id)
+
+
+def _material_title(body: CaptureCommit) -> str:
+    """What to call this capture in the folder listing.
+
+    Never blank and never bare: a folder showing "(untitled)" four times is a
+    folder you cannot navigate, so a capture with no title of its own is named
+    for what it was and when it arrived.
+    """
+    given = " ".join((body.title or "").split())[:200]
+    if given:
+        return given
+    kind = KIND_LABELS.get(body.kind, body.kind or "notes")
+    return f"Your {kind}, {utcnow().date().isoformat()}"
+
+
+KIND_LABELS = {
+    "image": "picture",
+    "pdf": "PDF",
+    "text": "notes",
+    "audio": "recording",
+    "video": "video",
+}
 
 
 @router.delete("/source/{filename}", status_code=204)

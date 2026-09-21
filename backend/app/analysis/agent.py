@@ -24,8 +24,8 @@ from PIL import Image
 from pydantic import BaseModel, ValidationError
 
 from ..query import BankQuery, Vocabulary
-from .base import AnalysisFailed, MistakeAnalysis, MistakeInput
-from .claude import INTERPRET_PROMPT, SUMMARISE_PROMPT, SYSTEM_PROMPT, _render, summarise_prompt
+from .base import AnalysisFailed
+from .claude import INTERPRET_PROMPT, SUMMARISE_PROMPT, summarise_prompt
 from .extract import _TEXT_LABELS, EXTRACT_PROMPT, CaptureExtraction, CaptureInput, _existing_block
 from .scan import SCAN_PROMPT, ScanInput, ScannedQuestion
 
@@ -141,11 +141,6 @@ class AgentAnalyzer:
 
     def __init__(self, model: str) -> None:
         self._model = model
-
-    async def analyze(self, mistake: MistakeInput) -> MistakeAnalysis:
-        return await _run(
-            prompt=_render(mistake), system=SYSTEM_PROMPT, model=self._model, schema=MistakeAnalysis
-        )
 
     async def interpret(self, question: str, today: date, vocabulary: Vocabulary) -> BankQuery:
         prompt = (

@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from enum import StrEnum
 
 from sqlalchemy import (
     JSON,
-    Boolean,
     Column,
     DateTime,
     ForeignKey,
-    Index,
     Integer,
     String,
     Table,
@@ -59,74 +56,6 @@ class UtcDateTime(TypeDecorator):
 
 class Base(DeclarativeBase):
     pass
-
-
-class AnalysisStatus(StrEnum):
-    # Logged by hand with the AI deliberately not asked. Not a failure - a choice.
-    not_requested = "not_requested"
-    pending = "pending"
-    ready = "ready"
-    failed = "failed"
-
-
-# Offered on the log form as a starting point. Not a closed set: the student's own
-# tags sit alongside these, and nothing here is special once it has been used.
-SUGGESTED_TAGS = (
-    "by mistake",
-    "ran out of time",
-    "guessed",
-    "didn't read the question",
-    "knew it, blanked",
-    "never seen this before",
-    "silly error",
-    "need to memorise",
-)
-
-
-class ErrorType(StrEnum):
-    """The 'why did I get this wrong' slots. The AI must pick exactly one.
-
-    Kept as a closed vocabulary so the bank can be grouped and counted; a free-text
-    label per mistake would make the slot view useless.
-    """
-
-    careless_arithmetic = "careless_arithmetic"
-    misread_question = "misread_question"
-    concept_gap = "concept_gap"
-    formula_error = "formula_error"
-    algebra_slip = "algebra_slip"
-    unit_or_conversion = "unit_or_conversion"
-    trap_answer = "trap_answer"
-    vocabulary_gap = "vocabulary_gap"
-    time_pressure_guess = "time_pressure_guess"
-    other = "other"
-
-
-class Difficulty(StrEnum):
-    easy = "easy"
-    medium = "medium"
-    hard = "hard"
-
-
-class Urgency(StrEnum):
-    """How badly this one needs revisiting.
-
-    Ordered most urgent first: a hole in something everything else is built on
-    outranks a question that merely matters. `URGENCY_RANK` in `review.py` turns
-    this into the order of the review queue.
-    """
-
-    fundamental = "fundamental"
-    very_important = "very_important"
-    important = "important"
-
-
-class ReviewOutcome(StrEnum):
-    correct = "correct"
-    wrong = "wrong"
-    skipped = "skipped"
-    # Not a student action: the rung was retired because a miss restarted the ladder.
-    superseded = "superseded"
 
 
 class Subject(Base):
@@ -192,6 +121,17 @@ concept_mistakes = Table(
     Base.metadata,
     Column("concept_id", ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True),
     Column("mistake_id", ForeignKey("mistakes.id", ondelete="CASCADE"), primary_key=True),
+)
+
+# Many-to-many, because a second video about the same topic adds its notes to a
+# concept that already exists rather than filing a duplicate - and after that the
+# concept genuinely came from two materials. A question has one material, so that
+# side is a plain column on `Mistake`.
+material_concepts = Table(
+    "material_concepts",
+    Base.metadata,
+    Column("material_id", ForeignKey("materials.id", ondelete="CASCADE"), primary_key=True),
+    Column("concept_id", ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True),
 )
 
 
@@ -261,10 +201,69 @@ class Concept(Base):
         cascade="all, delete-orphan",
         order_by="ConceptImage.position, ConceptImage.created_at",
     )
+    materials: Mapped[list[Material]] = relationship(
+        secondary=material_concepts,
+        back_populates="concepts",
+        order_by="Material.created_at",
+    )
+
+
+class Material(Base):
+    """One thing the student put in: a PDF, a video, a recording, a page of notes.
+
+    The record of a capture, kept so a folder can be read as "what I have put in
+    here" rather than as one pooled heap of concepts. Without it the app knows a
+    concept exists and where it is filed, but not which upload produced it, which
+    is the question you ask when you come back to a unit a month later.
+
+    Holds no bytes. A picture is already stored against the concepts it produced;
+    this is the receipt, not the file.
+    """
+
+    __tablename__ = "materials"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
+
+    # Filed exactly like a question or a concept, and by the same module: the
+    # folder is authoritative and `subject` is its name. See `filing.py`.
+    subject: Mapped[str | None] = mapped_column(String(80), index=True)
+    folder_id: Mapped[str | None] = mapped_column(
+        ForeignKey("folders.id", ondelete="SET NULL"), index=True
+    )
+
+    # What it was called - a video's title, a file's name, or a line of the text
+    # when it had neither. Never blank: a folder listing "(untitled)" four times
+    # is a folder you cannot navigate.
+    title: Mapped[str] = mapped_column(String(200))
+    # "pdf", "image", "text", "audio" or "video". Free text rather than an enum
+    # because the capture endpoint sniffs it from the bytes and a new kind should
+    # not need a migration to be recorded.
+    kind: Mapped[str] = mapped_column(String(16))
+    # The URL or filename it arrived as, when there was one.
+    source: Mapped[str | None] = mapped_column(String(400))
+    # The extractor's own summary of the whole thing, shown under the title.
+    summary: Mapped[str | None] = mapped_column(Text)
+
+    concepts: Mapped[list[Concept]] = relationship(
+        secondary=material_concepts,
+        back_populates="materials",
+        order_by="Concept.sequence.is_(None), Concept.sequence, Concept.title",
+    )
+    questions: Mapped[list[Mistake]] = relationship(
+        back_populates="material",
+        order_by="Mistake.created_at",
+    )
 
 
 class Mistake(Base):
-    """One question the student got wrong, plus the AI's analysis of why."""
+    """One practice question, as pulled out of a piece of study material.
+
+    Named `Mistake` and `mistakes` still, because renaming a table is a migration
+    with nothing to show for it. What it holds is a question, its answer, the
+    concepts it exercises and where it is filed.
+    """
 
     __tablename__ = "mistakes"
 
@@ -272,7 +271,7 @@ class Mistake(Base):
     user_id: Mapped[str] = mapped_column(String(64), index=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
 
-    # What the student logged.
+    # Where it came from - the video title, the file name.
     source: Mapped[str | None] = mapped_column(String(200))
     # Free text, whatever the student calls the area ("Biology", "Calculus"). Not a
     # closed vocabulary: the bank is for any subject, so the app cannot know them.
@@ -283,40 +282,19 @@ class Mistake(Base):
     )
     question_text: Mapped[str] = mapped_column(Text)
     choices: Mapped[list | None] = mapped_column(JSON)
-    your_answer: Mapped[str] = mapped_column(Text)
     correct_answer: Mapped[str] = mapped_column(Text)
     student_note: Mapped[str | None] = mapped_column(Text)
 
-    # What the AI produced.
-    analysis_status: Mapped[str] = mapped_column(
-        String(16), default=AnalysisStatus.pending, index=True
-    )
-    analysis_error: Mapped[str | None] = mapped_column(Text)
-    analyzed_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
-    analyzed_by: Mapped[str | None] = mapped_column(String(64))
-    # Set whenever a human writes over any analysis field. Guards the re-run:
-    # re-analysing would silently discard what they wrote.
-    analysis_edited_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
-
-    error_type: Mapped[str | None] = mapped_column(String(32), index=True)
     topic: Mapped[str | None] = mapped_column(String(120), index=True)
-    difficulty: Mapped[str | None] = mapped_column(String(16))
-    urgency: Mapped[str | None] = mapped_column(String(20), index=True)
-    # Set when the student chose the urgency themselves. The analyzer then leaves it
-    # alone: having the AI overwrite the importance you just picked, seconds after you
-    # picked it, is worse than having no AI opinion at all.
-    urgency_is_yours: Mapped[bool] = mapped_column(Boolean, default=False)
-    why_wrong: Mapped[str | None] = mapped_column(Text)
-    correct_reasoning: Mapped[str | None] = mapped_column(Text)
-    takeaway: Mapped[str | None] = mapped_column(Text)
-    trap: Mapped[str | None] = mapped_column(Text)
     tags: Mapped[list | None] = mapped_column(JSON)
 
-    reviews: Mapped[list[ReviewEvent]] = relationship(
-        back_populates="mistake",
-        cascade="all, delete-orphan",
-        order_by="ReviewEvent.due_at",
+    # The upload this came out of. Null for a question that predates materials, so
+    # the bank can still show it rather than hiding what it cannot attribute.
+    material_id: Mapped[str | None] = mapped_column(
+        ForeignKey("materials.id", ondelete="SET NULL"), index=True
     )
+    material: Mapped[Material | None] = relationship(back_populates="questions")
+
     images: Mapped[list[MistakeImage]] = relationship(
         back_populates="mistake",
         cascade="all, delete-orphan",
@@ -394,32 +372,6 @@ class MistakeImage(Base):
         return f"/uploads/{self.filename}"
 
 
-class ReviewEvent(Base):
-    """One rung of the ladder: this mistake comes back at this time."""
-
-    __tablename__ = "review_events"
-
-    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
-    mistake_id: Mapped[str] = mapped_column(
-        ForeignKey("mistakes.id", ondelete="CASCADE"), index=True
-    )
-    # Which pass over the ladder this belongs to. A missed review restarts the ladder,
-    # so cycle 0 is the original run, cycle 1 the one armed by the first miss, etc.
-    cycle: Mapped[int] = mapped_column(Integer, default=0)
-    step_index: Mapped[int] = mapped_column(Integer)
-    interval_label: Mapped[str] = mapped_column(String(8))
-
-    due_at: Mapped[datetime] = mapped_column(UtcDateTime(), index=True)
-    completed_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
-    outcome: Mapped[str | None] = mapped_column(String(16))
-
-    mistake: Mapped[Mistake] = relationship(back_populates="reviews")
-
-
-# The due-queue reads open events ordered by due date; this is its covering index.
-Index("ix_review_events_open", ReviewEvent.completed_at, ReviewEvent.due_at)
-
-
 def blank_collections(mistake: Mistake) -> Mistake:
     """Initialise the collections a brand-new question serialises but never loads.
 
@@ -445,7 +397,6 @@ def mistake_options() -> tuple:
     MissingGreenlet at response time, on whichever endpoint was forgotten.
     """
     return (
-        selectinload(Mistake.reviews),
         selectinload(Mistake.concepts),
         selectinload(Mistake.images),
     )

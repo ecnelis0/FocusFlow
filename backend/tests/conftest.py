@@ -54,7 +54,6 @@ MATH_MISTAKE = {
     "source": "Practice Test 4",
     "question_text": "If 3x + 7 = 22, what is the value of x?",
     "choices": ["3", "5", "7", "15"],
-    "your_answer": "7",
     "correct_answer": "5",
     "student_note": "I subtracted wrong under time pressure.",
 }
@@ -63,6 +62,47 @@ BIOLOGY_MISTAKE = {
     "subject": "Biology",
     "question_text": "Which organelle is the site of cellular respiration?",
     "choices": ["Ribosome", "Mitochondrion", "Chloroplast", "Nucleus"],
-    "your_answer": "Chloroplast",
     "correct_answer": "Mitochondrion",
 }
+
+
+async def add_question(session_factory, payload: dict, user_id: str = "local", **overrides) -> str:
+    """Put a question straight into the bank, and hand back its id.
+
+    There is no endpoint that creates one any more - questions arrive through
+    `POST /capture` + `/capture/commit`, which is a lot of ceremony when a test
+    only needs a row to filter on. Driving capture for setup would also couple
+    every one of those tests to whatever the offline extractor happens to make of
+    the text, which is not what they are about.
+    """
+    from app.filing import ensure_subject, file_into, resolve_folder
+    from app.models import Mistake, new_id, utcnow
+
+    fields = {**payload, **overrides}
+    folder_id = fields.pop("folder_id", None)
+    concept_ids = fields.pop("concept_ids", None) or []
+
+    async with session_factory() as session:
+        mistake = Mistake(id=new_id(), user_id=user_id, created_at=utcnow(), **fields)
+        mistake.concepts = []
+        mistake.images = []
+        # Through `filing`, not by setting the column: the folder is authoritative
+        # and `subject` is its name, and a test that set both by hand would be
+        # asserting against a pairing the app itself can never produce.
+        folder = await resolve_folder(session, user_id, folder_id)
+        if folder is not None:
+            file_into(mistake, folder)
+        else:
+            await ensure_subject(session, user_id, mistake.subject)
+        if concept_ids:
+            from sqlalchemy import select
+
+            from app.models import Concept
+
+            found = await session.scalars(
+                select(Concept).where(Concept.id.in_(concept_ids), Concept.user_id == user_id)
+            )
+            mistake.concepts = list(found)
+        session.add(mistake)
+        await session.commit()
+        return mistake.id

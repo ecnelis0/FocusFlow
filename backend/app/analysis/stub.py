@@ -10,9 +10,7 @@ from __future__ import annotations
 import re
 from datetime import date, timedelta
 
-from ..models import Difficulty, ErrorType, Urgency
 from ..query import BankQuery, Vocabulary
-from .base import MistakeAnalysis, MistakeInput
 
 # One keyword -> topic map for every subject. It is a stand-in, not a taxonomy: the
 # point is that the offline analyzer files a question somewhere plausible.
@@ -46,53 +44,8 @@ def _guess_topic(text: str) -> str:
     return _FALLBACK_TOPIC
 
 
-def _guess_error_type(mistake: MistakeInput) -> ErrorType:
-    # Two numbers that disagree is most likely a slip in the working; anything else
-    # is treated as not knowing the thing. Crude, but consistent across subjects.
-    both_numeric = all(_looks_numeric(v) for v in (mistake.your_answer, mistake.correct_answer))
-    return ErrorType.careless_arithmetic if both_numeric else ErrorType.concept_gap
-
-
-def _looks_numeric(value: str) -> bool:
-    try:
-        float(value.strip().replace(",", ""))
-    except ValueError:
-        return False
-    return True
-
-
-# A concept the student has not got is worth more attention than a slip they have.
-_URGENT_ERRORS = {
-    ErrorType.concept_gap: Urgency.fundamental,
-    ErrorType.formula_error: Urgency.fundamental,
-    ErrorType.trap_answer: Urgency.very_important,
-    ErrorType.misread_question: Urgency.very_important,
-}
-
-
 class StubAnalyzer:
     name = "stub"
-
-    async def analyze(self, mistake: MistakeInput) -> MistakeAnalysis:
-        topic = _guess_topic(mistake.question_text)
-        error_type = _guess_error_type(mistake)
-        return MistakeAnalysis(
-            error_type=error_type,
-            urgency=_URGENT_ERRORS.get(error_type, Urgency.important),
-            topic=topic,
-            difficulty=Difficulty.medium,
-            why_wrong=(
-                f"You answered {mistake.your_answer!r} where the answer is "
-                f"{mistake.correct_answer!r}. (Offline analyzer: set AI_PROVIDER=claude "
-                "for a real explanation.)"
-            ),
-            correct_reasoning=(
-                f"Work the {topic} step that separates {mistake.correct_answer!r} from "
-                f"{mistake.your_answer!r}, then check it against the question stem."
-            ),
-            takeaway=f"Re-read the stem before committing on {topic} questions.",
-            trap=f"{mistake.your_answer!r} is the answer you reach if you stop one step early.",
-        )
 
     async def interpret(self, question: str, today: date, vocabulary: Vocabulary) -> BankQuery:
         return _interpret(question, today, vocabulary)
@@ -135,12 +88,6 @@ class StubAnalyzer:
 # Keyword matching, not understanding. It covers the phrasings the app's own copy
 # uses so the assistant is demonstrable without a key; anything subtler needs a
 # real provider.
-
-_URGENCY_WORDS = (
-    ("fundamental", Urgency.fundamental),
-    ("very important", Urgency.very_important),
-    ("important", Urgency.important),
-)
 
 _UNITS = {
     "day": 1,
@@ -224,15 +171,6 @@ def _since(text: str, today: date) -> date | None:
 def _interpret(question: str, today: date, vocabulary: Vocabulary) -> BankQuery:
     text = question.lower()
 
-    urgency = []
-    for word, level in _URGENCY_WORDS:
-        if word in text:
-            urgency.append(level)
-            # "very important" contains "important"; the longer phrase wins.
-            break
-
-    error_types = [member for member in ErrorType if member.value.replace("_", " ") in text]
-
     # Match against what the bank actually holds rather than a hardcoded list: the
     # student's own subjects, topics and concept titles are the words they will use.
     subjects = [subject for subject in vocabulary.subjects if _mentions(text, subject)]
@@ -240,12 +178,8 @@ def _interpret(question: str, today: date, vocabulary: Vocabulary) -> BankQuery:
     concepts = [title for title in vocabulary.concepts if _mentions(text, title)]
 
     return BankQuery(
-        urgency=urgency,
         subjects=subjects,
-        error_type=error_types,
         topics=topics,
         concepts=concepts,
         logged_after=_since(text, today),
-        only_due=("due" in text or "review now" in text),
-        sort="most_urgent" if "urgent" in text else "newest",
     )

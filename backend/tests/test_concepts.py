@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from tests.conftest import BIOLOGY_MISTAKE, MATH_MISTAKE
+from tests.conftest import BIOLOGY_MISTAKE, MATH_MISTAKE, add_question
 
 CONCEPT = {
     "title": "Circumference gives you the radius first",
@@ -24,8 +24,8 @@ async def _concept(client, **overrides):
     return response.json()
 
 
-async def _question(client, payload=MATH_MISTAKE):
-    return (await client.post("/mistakes", json=payload)).json()["id"]
+async def _question(session_factory, payload=MATH_MISTAKE):
+    return await add_question(session_factory, payload)
 
 
 async def test_a_concept_can_be_written_down(client):
@@ -56,9 +56,9 @@ async def test_a_blank_title_is_rejected(client):
     assert (await client.post("/concepts", json={"title": "   "})).status_code == 422
 
 
-async def test_a_question_is_tagged_after_it_was_created(client):
+async def test_a_question_is_tagged_after_it_was_created(client, session_factory):
     """The point of the feature: tag an existing question, not one being written."""
-    mistake_id = await _question(client)
+    mistake_id = await _question(session_factory)
     concept = await _concept(client)
 
     tagged = (await client.post(f"/concepts/{concept['id']}/questions/{mistake_id}")).json()
@@ -71,8 +71,8 @@ async def test_a_question_is_tagged_after_it_was_created(client):
     assert [c["title"] for c in mistake["concepts"]] == [CONCEPT["title"]]
 
 
-async def test_tagging_the_same_question_twice_is_not_an_error(client):
-    mistake_id = await _question(client)
+async def test_tagging_the_same_question_twice_is_not_an_error(client, session_factory):
+    mistake_id = await _question(session_factory)
     concept = await _concept(client)
 
     await client.post(f"/concepts/{concept['id']}/questions/{mistake_id}")
@@ -82,8 +82,8 @@ async def test_tagging_the_same_question_twice_is_not_an_error(client):
     assert again.json()["question_count"] == 1
 
 
-async def test_one_question_can_sit_under_several_concepts(client):
-    mistake_id = await _question(client)
+async def test_one_question_can_sit_under_several_concepts(client, session_factory):
+    mistake_id = await _question(session_factory)
     first = await _concept(client, title="Circumference gives the radius")
     second = await _concept(client, title="Read the units before answering")
 
@@ -97,10 +97,10 @@ async def test_one_question_can_sit_under_several_concepts(client):
     ]
 
 
-async def test_a_concept_collects_many_questions(client):
+async def test_a_concept_collects_many_questions(client, session_factory):
     concept = await _concept(client)
-    first = await _question(client)
-    second = await _question(client, BIOLOGY_MISTAKE)
+    first = await _question(session_factory)
+    second = await _question(session_factory, BIOLOGY_MISTAKE)
 
     await client.post(f"/concepts/{concept['id']}/questions/{first}")
     await client.post(f"/concepts/{concept['id']}/questions/{second}")
@@ -110,8 +110,8 @@ async def test_a_concept_collects_many_questions(client):
     assert detail["question_count"] == 2
 
 
-async def test_untagging_leaves_the_question_alone(client):
-    mistake_id = await _question(client)
+async def test_untagging_leaves_the_question_alone(client, session_factory):
+    mistake_id = await _question(session_factory)
     concept = await _concept(client)
     await client.post(f"/concepts/{concept['id']}/questions/{mistake_id}")
 
@@ -121,11 +121,10 @@ async def test_untagging_leaves_the_question_alone(client):
     # The question itself, and its ladder, survive being untagged.
     mistake = (await client.get(f"/mistakes/{mistake_id}")).json()
     assert mistake["concepts"] == []
-    assert len(mistake["reviews"]) == 5
 
 
-async def test_deleting_a_concept_does_not_delete_its_questions(client):
-    mistake_id = await _question(client)
+async def test_deleting_a_concept_does_not_delete_its_questions(client, session_factory):
+    mistake_id = await _question(session_factory)
     concept = await _concept(client)
     await client.post(f"/concepts/{concept['id']}/questions/{mistake_id}")
 
@@ -136,8 +135,8 @@ async def test_deleting_a_concept_does_not_delete_its_questions(client):
     assert (await client.get(f"/mistakes/{mistake_id}")).json()["concepts"] == []
 
 
-async def test_deleting_a_question_removes_it_from_its_concepts(client):
-    mistake_id = await _question(client)
+async def test_deleting_a_question_removes_it_from_its_concepts(client, session_factory):
+    mistake_id = await _question(session_factory)
     concept = await _concept(client)
     await client.post(f"/concepts/{concept['id']}/questions/{mistake_id}")
 
@@ -163,11 +162,11 @@ async def test_a_concept_can_be_rewritten(client):
     assert updated["updated_at"] is not None
 
 
-async def test_concepts_are_listed_with_the_busiest_first(client):
+async def test_concepts_are_listed_with_the_busiest_first(client, session_factory):
     quiet = await _concept(client, title="Rarely used")
     busy = await _concept(client, title="Comes up constantly")
     for _ in range(2):
-        await client.post(f"/concepts/{busy['id']}/questions/{await _question(client)}")
+        await client.post(f"/concepts/{busy['id']}/questions/{await _question(session_factory)}")
 
     listed = (await client.get("/concepts")).json()
 
@@ -186,8 +185,8 @@ async def test_concepts_belong_to_one_student(client):
     ).status_code == 404
 
 
-async def test_you_cannot_tag_someone_elses_question(client):
-    mistake_id = await _question(client)
+async def test_you_cannot_tag_someone_elses_question(client, session_factory):
+    mistake_id = await _question(session_factory)
     concept = await _concept(client)
 
     response = await client.post(
@@ -198,9 +197,9 @@ async def test_you_cannot_tag_someone_elses_question(client):
     assert response.status_code == 404
 
 
-async def test_the_bank_can_be_filtered_to_one_concept(client):
-    tagged = await _question(client)
-    await _question(client, BIOLOGY_MISTAKE)
+async def test_the_bank_can_be_filtered_to_one_concept(client, session_factory):
+    tagged = await _question(session_factory)
+    await _question(session_factory, BIOLOGY_MISTAKE)
     concept = await _concept(client)
     await client.post(f"/concepts/{concept['id']}/questions/{tagged}")
 
@@ -209,34 +208,24 @@ async def test_the_bank_can_be_filtered_to_one_concept(client):
     assert [m["id"] for m in found] == [tagged]
 
 
-async def test_a_concept_filter_narrows_alongside_the_others(client):
-    both = await _question(client)
-    concept_only = await _question(client)
+async def test_a_concept_filter_narrows_alongside_the_others(client, session_factory):
+    """A concept is one facet among several, not a filter that overrides the rest."""
+    both = await _question(session_factory)
+    concept_only = await _question(session_factory)
     concept = await _concept(client)
     await client.post(f"/concepts/{concept['id']}/questions/{both}")
     await client.post(f"/concepts/{concept['id']}/questions/{concept_only}")
-    await client.patch(f"/mistakes/{both}", json={"urgency": "fundamental"})
-    await client.patch(f"/mistakes/{concept_only}", json={"urgency": "important"})
+    await client.patch(f"/mistakes/{both}", json={"topic": "circles"})
+    await client.patch(f"/mistakes/{concept_only}", json={"topic": "vectors"})
 
     found = (
         await client.post(
             "/mistakes/search",
-            json={"concept_ids": [concept["id"]], "urgency": ["fundamental"]},
+            json={"concept_ids": [concept["id"]], "topics": ["circles"]},
         )
     ).json()
 
     assert [m["id"] for m in found] == [both]
-
-
-async def test_stats_counts_the_questions_under_each_concept(client):
-    concept = await _concept(client)
-    empty = await _concept(client, title="Nothing tagged yet")
-    await client.post(f"/concepts/{concept['id']}/questions/{await _question(client)}")
-
-    stats = (await client.get("/stats")).json()
-
-    assert {"key": CONCEPT["title"], "count": 1} in stats["by_concept"]
-    assert {"key": empty["title"], "count": 0} in stats["by_concept"]
 
 
 # --- pictures on a concept -----------------------------------------------------
@@ -334,9 +323,9 @@ async def test_deleting_a_concept_takes_its_diagrams_with_it(client, uploads):
     assert not path.exists()
 
 
-async def test_no_upload_outlives_the_thing_it_was_attached_to(client, uploads):
+async def test_no_upload_outlives_the_thing_it_was_attached_to(client, uploads, session_factory):
     """The invariant: nothing on disk without a row pointing at it."""
-    mistake_id = await _question(client)
+    mistake_id = await _question(session_factory)
     concept = await _concept(client)
     await client.post(
         f"/mistakes/{mistake_id}/images",

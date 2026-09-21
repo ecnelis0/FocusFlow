@@ -13,7 +13,7 @@ invisible when broken:
 
 from __future__ import annotations
 
-from tests.conftest import BIOLOGY_MISTAKE, MATH_MISTAKE
+from tests.conftest import BIOLOGY_MISTAKE, MATH_MISTAKE, add_question
 
 
 async def _subject(client, name="APUSH"):
@@ -89,18 +89,19 @@ async def test_the_same_folder_name_is_fine_in_two_subjects(client):
 # --- filing --------------------------------------------------------------------
 
 
-async def test_filing_a_question_gives_it_the_folders_subject(client):
-    """The folder decides the subject. A subject typed alongside it does not."""
+async def test_filing_a_question_gives_it_the_folders_subject(client, session_factory):
+    """The folder decides the subject. A subject carried alongside it does not."""
     subject = await _subject(client, "APUSH")
     folder = await _folder(client, subject["id"])
 
-    logged = await client.post(
-        "/mistakes",
-        json={**MATH_MISTAKE, "subject": "Something else entirely", "folder_id": folder["id"]},
+    question_id = await add_question(
+        session_factory,
+        {**MATH_MISTAKE, "subject": "Something else entirely", "folder_id": folder["id"]},
     )
-    assert logged.status_code == 201
-    assert logged.json()["folder_id"] == folder["id"]
-    assert logged.json()["subject"] == "APUSH"
+
+    logged = (await client.get(f"/mistakes/{question_id}")).json()
+    assert logged["folder_id"] == folder["id"]
+    assert logged["subject"] == "APUSH"
 
 
 async def test_filing_a_concept_gives_it_the_folders_subject(client):
@@ -115,22 +116,29 @@ async def test_filing_a_concept_gives_it_the_folders_subject(client):
     assert concept.json()["folder_id"] == folder["id"]
 
 
-async def test_a_folder_from_someone_elses_bank_is_a_404(client):
-    """Not a silent unfiling: filing into a folder you do not own is an attempt."""
+async def test_a_folder_from_someone_elses_bank_is_a_404(client, session_factory):
+    """Not a silent unfiling: filing into a folder you do not own is an attempt.
+
+    Asserted against `/capture/commit`, which is the only way anything is filed
+    now that questions are no longer logged one at a time.
+    """
     subject = await _subject(client)
     folder = await _folder(client, subject["id"])
 
     theirs = await client.post(
-        "/mistakes",
-        json={**MATH_MISTAKE, "folder_id": folder["id"]},
+        "/capture/commit",
+        json={
+            "concepts": [{"title": "Theirs", "body": "", "subject": None}],
+            "folder_id": folder["id"],
+        },
         headers={"X-User-Id": "someone-else"},
     )
     assert theirs.status_code == 404
 
 
-async def test_logging_with_a_typed_subject_creates_its_tab(client):
+async def test_logging_with_a_typed_subject_creates_its_tab(client, session_factory):
     """A subject nobody created must still get a tab, or its questions have no home."""
-    await client.post("/mistakes", json=BIOLOGY_MISTAKE)
+    await add_question(session_factory, BIOLOGY_MISTAKE)
 
     listed = (await client.get("/subjects")).json()
     assert [s["name"] for s in listed] == ["Biology"]
@@ -138,12 +146,12 @@ async def test_logging_with_a_typed_subject_creates_its_tab(client):
     assert listed[0]["unfiled_question_count"] == 1
 
 
-async def test_counts_split_filed_from_unfiled(client):
+async def test_counts_split_filed_from_unfiled(client, session_factory):
     subject = await _subject(client, "Math")
     folder = await _folder(client, subject["id"], "Linear equations")
 
-    await client.post("/mistakes", json={**MATH_MISTAKE, "folder_id": folder["id"]})
-    await client.post("/mistakes", json=MATH_MISTAKE)  # same subject, no folder
+    await add_question(session_factory, {**MATH_MISTAKE, "folder_id": folder["id"]})
+    await add_question(session_factory, MATH_MISTAKE)  # same subject, no folder
 
     listed = (await client.get("/subjects")).json()
     assert listed[0]["question_count"] == 2
@@ -151,13 +159,14 @@ async def test_counts_split_filed_from_unfiled(client):
     assert listed[0]["unfiled_question_count"] == 1
 
 
-async def test_taking_a_question_out_of_its_folder_keeps_its_subject(client):
+async def test_taking_a_question_out_of_its_folder_keeps_its_subject(client, session_factory):
     """Unfiled from a unit is not the same as no longer being a Calculus question."""
     subject = await _subject(client, "Calculus")
     folder = await _folder(client, subject["id"], "Related rates")
-    logged = (
-        await client.post("/mistakes", json={**MATH_MISTAKE, "folder_id": folder["id"]})
-    ).json()
+    question_id = await add_question(
+        session_factory, {**MATH_MISTAKE, "folder_id": folder["id"]}
+    )
+    logged = (await client.get(f"/mistakes/{question_id}")).json()
 
     moved = await client.patch(f"/mistakes/{logged['id']}", json={"folder_id": None})
     assert moved.json()["folder_id"] is None
@@ -167,12 +176,13 @@ async def test_taking_a_question_out_of_its_folder_keeps_its_subject(client):
 # --- the copied name, and the three things that have to carry it ----------------
 
 
-async def test_renaming_a_subject_carries_the_new_name_to_its_rows(client):
+async def test_renaming_a_subject_carries_the_new_name_to_its_rows(client, session_factory):
     subject = await _subject(client, "APUSH")
     folder = await _folder(client, subject["id"])
-    logged = (
-        await client.post("/mistakes", json={**MATH_MISTAKE, "folder_id": folder["id"]})
-    ).json()
+    question_id = await add_question(
+        session_factory, {**MATH_MISTAKE, "folder_id": folder["id"]}
+    )
+    logged = (await client.get(f"/mistakes/{question_id}")).json()
     concept = (
         await client.post(
             "/concepts", json={"title": "Taxation without representation", "subject": "APUSH"}
@@ -189,13 +199,14 @@ async def test_renaming_a_subject_carries_the_new_name_to_its_rows(client):
     assert (await client.get(f"/concepts/{concept['id']}")).json()["subject"] == "AP US History"
 
 
-async def test_moving_a_folder_carries_everything_in_it(client):
+async def test_moving_a_folder_carries_everything_in_it(client, session_factory):
     apush = await _subject(client, "APUSH")
     calc = await _subject(client, "Calculus")
     folder = await _folder(client, apush["id"], "Unit 1")
-    logged = (
-        await client.post("/mistakes", json={**MATH_MISTAKE, "folder_id": folder["id"]})
-    ).json()
+    question_id = await add_question(
+        session_factory, {**MATH_MISTAKE, "folder_id": folder["id"]}
+    )
+    logged = (await client.get(f"/mistakes/{question_id}")).json()
 
     moved = await client.patch(f"/folders/{folder['id']}", json={"subject_id": calc["id"]})
     assert moved.status_code == 200
@@ -208,13 +219,14 @@ async def test_moving_a_folder_carries_everything_in_it(client):
     assert listed["Calculus"]["question_count"] == 1
 
 
-async def test_renaming_a_folder_does_not_move_anything(client):
+async def test_renaming_a_folder_does_not_move_anything(client, session_factory):
     """The move rewrites subjects unconditionally; a rename must not be a move."""
     apush = await _subject(client, "APUSH")
     folder = await _folder(client, apush["id"], "Unit 1")
-    logged = (
-        await client.post("/mistakes", json={**MATH_MISTAKE, "folder_id": folder["id"]})
-    ).json()
+    question_id = await add_question(
+        session_factory, {**MATH_MISTAKE, "folder_id": folder["id"]}
+    )
+    logged = (await client.get(f"/mistakes/{question_id}")).json()
 
     renamed = await client.patch(f"/folders/{folder['id']}", json={"name": "Unit 1: Colonial"})
     assert renamed.json()["name"] == "Unit 1: Colonial"
@@ -225,12 +237,13 @@ async def test_renaming_a_folder_does_not_move_anything(client):
     assert after["folder_id"] == folder["id"]
 
 
-async def test_deleting_a_folder_keeps_the_questions_in_the_subject(client):
+async def test_deleting_a_folder_keeps_the_questions_in_the_subject(client, session_factory):
     subject = await _subject(client, "APUSH")
     folder = await _folder(client, subject["id"])
-    logged = (
-        await client.post("/mistakes", json={**MATH_MISTAKE, "folder_id": folder["id"]})
-    ).json()
+    question_id = await add_question(
+        session_factory, {**MATH_MISTAKE, "folder_id": folder["id"]}
+    )
+    logged = (await client.get(f"/mistakes/{question_id}")).json()
 
     assert (await client.delete(f"/folders/{folder['id']}")).status_code == 204
 
@@ -243,13 +256,14 @@ async def test_deleting_a_folder_keeps_the_questions_in_the_subject(client):
     assert listed[0]["unfiled_question_count"] == 1
 
 
-async def test_deleting_a_subject_leaves_its_questions_unfiled_not_deleted(client):
+async def test_deleting_a_subject_leaves_its_questions_unfiled_not_deleted(client, session_factory):
     """Losing where something was filed is bad. Losing the question is unthinkable."""
     subject = await _subject(client, "APUSH")
     folder = await _folder(client, subject["id"])
-    logged = (
-        await client.post("/mistakes", json={**MATH_MISTAKE, "folder_id": folder["id"]})
-    ).json()
+    question_id = await add_question(
+        session_factory, {**MATH_MISTAKE, "folder_id": folder["id"]}
+    )
+    logged = (await client.get(f"/mistakes/{question_id}")).json()
 
     assert (await client.delete(f"/subjects/{subject['id']}")).status_code == 204
 
@@ -280,30 +294,30 @@ async def test_a_deleted_subject_leaves_no_row_pointing_at_a_gone_folder(client)
 # --- the bank filters by folder ------------------------------------------------
 
 
-async def test_the_bank_can_be_filtered_to_one_folder(client):
+async def test_the_bank_can_be_filtered_to_one_folder(client, session_factory):
     subject = await _subject(client, "Math")
     unit_one = await _folder(client, subject["id"], "Linear equations")
     unit_two = await _folder(client, subject["id"], "Circles")
 
-    await client.post("/mistakes", json={**MATH_MISTAKE, "folder_id": unit_one["id"]})
-    await client.post("/mistakes", json={**BIOLOGY_MISTAKE, "folder_id": unit_two["id"]})
+    await add_question(session_factory, {**MATH_MISTAKE, "folder_id": unit_one["id"]})
+    await add_question(session_factory, {**BIOLOGY_MISTAKE, "folder_id": unit_two["id"]})
 
     found = await client.post("/mistakes/search", json={"folder_ids": [unit_one["id"]]})
     assert [m["question_text"] for m in found.json()] == [MATH_MISTAKE["question_text"]]
 
 
-async def test_the_bank_can_show_what_is_not_in_a_folder_yet(client):
+async def test_the_bank_can_show_what_is_not_in_a_folder_yet(client, session_factory):
     """The "Unfiled" card's filter: in the subject, in none of its folders."""
     subject = await _subject(client, "Math")
     folder = await _folder(client, subject["id"], "Linear equations")
 
-    await client.post("/mistakes", json={**MATH_MISTAKE, "folder_id": folder["id"]})
-    loose = await client.post("/mistakes", json={**BIOLOGY_MISTAKE, "subject": "Math"})
+    await add_question(session_factory, {**MATH_MISTAKE, "folder_id": folder["id"]})
+    loose = await add_question(session_factory, {**BIOLOGY_MISTAKE, "subject": "Math"})
 
     found = await client.post(
         "/mistakes/search", json={"subjects": ["Math"], "has_folder": False}
     )
-    assert [m["id"] for m in found.json()] == [loose.json()["id"]]
+    assert [m["id"] for m in found.json()] == [loose]
 
 
 async def test_a_subject_on_a_question_but_in_no_row_still_gets_a_tab(client, session_factory):
@@ -324,7 +338,6 @@ async def test_a_subject_on_a_question_but_in_no_row_still_gets_a_tab(client, se
                 created_at=utcnow(),
                 subject="Spanish",
                 question_text="ser or estar?",
-                your_answer="ser",
                 correct_answer="estar",
             )
         )
@@ -348,7 +361,6 @@ async def test_reconciling_does_not_split_one_course_into_two_tabs(client, sessi
                     created_at=utcnow(),
                     subject=spelling,
                     question_text=f"Something about {spelling}",
-                    your_answer="a",
                     correct_answer="b",
                 )
             )

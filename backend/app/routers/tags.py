@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from ..deps import SessionDep, UserDep
-from ..models import SUGGESTED_TAGS, Mistake
+from ..models import Mistake
 
 router = APIRouter(prefix="/tags", tags=["tags"])
 
@@ -40,13 +40,9 @@ async def list_tags(session: SessionDep, user_id: UserDep) -> list[TagCount]:
             canonical.setdefault(key, tag)
             counts[key] = counts.get(key, 0) + 1
 
-    used = [
+    # No suggested list any more: the log form that offered one is gone, and the
+    # tags that exist now are the ones a capture put on ("practice").
+    return [
         TagCount(tag=canonical[key], count=count)
         for key, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     ]
-    unused = [
-        TagCount(tag=tag, count=0, suggested=True)
-        for tag in SUGGESTED_TAGS
-        if tag.casefold() not in counts
-    ]
-    return used + unused
