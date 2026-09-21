@@ -26,15 +26,22 @@ import {
   type Facets,
   NO_FACETS,
 } from "@/lib/facets";
-import { ERROR_TYPE_LABELS } from "@/lib/labels";
+import { ERROR_TYPE_LABELS, URGENCY_LABELS } from "@/lib/labels";
 import type { ErrorType, Urgency } from "@/lib/types";
 
-/** One selected facet, with the click that removes it. */
+/** One selected facet, with the click that removes it.
+ *
+ *  `name` exists because `label` may be a badge rather than a string, and every
+ *  one of these buttons used to answer to "Remove filter" — six identical
+ *  accessible names on one row, which tells a screen reader nothing about which
+ *  filter it is about to drop and leaves a test no way to name one either. */
 function Pill({
   label,
+  name,
   onRemove,
 }: {
   label: React.ReactNode;
+  name: string;
   onRemove: () => void;
 }) {
   return (
@@ -43,7 +50,7 @@ function Pill({
       <button
         type="button"
         onClick={onRemove}
-        aria-label="Remove filter"
+        aria-label={`Remove filter ${name}`}
         className="rounded-full px-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
         ×
@@ -190,6 +197,7 @@ function BankList() {
             <Pill
               key={value}
               label={conceptTitle(value)}
+              name={conceptTitle(value)}
               onRemove={() => apply(toggle(facets, "concept_ids", value))}
             />
           ))}
@@ -198,6 +206,7 @@ function BankList() {
               label={
                 facets.hasConcept ? "Filed under a concept" : "No concept yet"
               }
+              name={facets.hasConcept ? "Filed under a concept" : "No concept yet"}
               onRemove={() => apply({ ...facets, hasConcept: null })}
             />
           )}
@@ -205,6 +214,7 @@ function BankList() {
             <Pill
               key={value}
               label={<UrgencyBadge urgency={value as Urgency} />}
+              name={URGENCY_LABELS[value as Urgency] ?? value}
               onRemove={() => apply(toggle(facets, "urgency", value))}
             />
           ))}
@@ -212,6 +222,7 @@ function BankList() {
             <Pill
               key={value}
               label={value}
+              name={value}
               onRemove={() => apply(toggle(facets, "subjects", value))}
             />
           ))}
@@ -219,6 +230,7 @@ function BankList() {
             <Pill
               key={value}
               label={ERROR_TYPE_LABELS[value as ErrorType] ?? value}
+              name={ERROR_TYPE_LABELS[value as ErrorType] ?? value}
               onRemove={() => apply(toggle(facets, "error_type", value))}
             />
           ))}
@@ -226,6 +238,7 @@ function BankList() {
             <Pill
               key={value}
               label={value}
+              name={value}
               onRemove={() => apply(toggle(facets, "topics", value))}
             />
           ))}
@@ -233,12 +246,14 @@ function BankList() {
             <Pill
               key={value}
               label={folderName(value)}
+              name={folderName(value)}
               onRemove={() => apply(toggle(facets, "folder_ids", value))}
             />
           ))}
           {facets.hasFolder !== null && (
             <Pill
               label={facets.hasFolder ? "In a folder" : "Not in a folder"}
+              name={facets.hasFolder ? "In a folder" : "Not in a folder"}
               onRemove={() => apply({ ...facets, hasFolder: null })}
             />
           )}

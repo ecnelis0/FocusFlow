@@ -88,9 +88,13 @@ test("a filtered bank is a link, and each filter can be peeled off", async ({ pa
   await expect(page.getByText(question)).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("Fundamental concept").first()).toBeVisible();
 
-  // Removing a filter widens the result rather than resetting everything.
-  await page.getByRole("button", { name: "Remove filter" }).first().click();
+  // Removing a filter widens the result rather than resetting everything. Named,
+  // not "the first one": the pills are rendered in a fixed order that is not this
+  // test's business, and when that order changed this quietly began peeling the
+  // urgency off and asserting the urgency was still there.
+  await page.getByRole("button", { name: `Remove filter peel ${stamp}` }).click();
   await expect(page).toHaveURL(/urgency=fundamental/);
+  await expect(page).not.toHaveURL(/topic=/);
   await expect(page.getByText(question)).toBeVisible();
 
   await page.getByRole("button", { name: "Clear all" }).click();
