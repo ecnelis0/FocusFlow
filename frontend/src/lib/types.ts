@@ -89,6 +89,14 @@ export interface Concept extends ConceptSummary {
    *  Sent as a parent pointer, not nested children, so the tree is assembled
    *  once where it is drawn. */
   parent_id: string | null;
+  /** Where it sits in the order the material runs, counted among its own
+   *  siblings — branches against branches, a branch's details against each
+   *  other. Null when the reading gave no order. Not a global rank: sorting one
+   *  flat list by it interleaves every branch's first detail. */
+  sequence: number | null;
+  /** What that position is called, shown to the student: "1763", "Step 2".
+   *  Null whenever the material named no moment; the order still holds. */
+  when_label: string | null;
   question_count: number;
   images: MistakeImage[];
 }

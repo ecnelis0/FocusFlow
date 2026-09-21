@@ -290,6 +290,11 @@ class ConceptRead(BaseModel):
     # sent as parent pointers rather than nested children: a concept is serialised
     # in several places and a recursive shape would have to be cut off somewhere.
     parent_id: str | None = None
+    # Position among siblings in the order the material runs, and what that
+    # position is called. Null sequence means the reading gave no order; every
+    # list falls back to the title so it is still deterministic.
+    sequence: int | None = None
+    when_label: str | None = None
     question_count: int = 0
     images: list[ImageRead] = []
 

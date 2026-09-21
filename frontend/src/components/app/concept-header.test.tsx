@@ -14,6 +14,8 @@ function concept(overrides: Partial<ConceptDetail> = {}): ConceptDetail {
     subject: "Algebra",
     folder_id: null,
   parent_id: null,
+  sequence: null,
+  when_label: null,
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: 3,

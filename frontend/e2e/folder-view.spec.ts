@@ -61,3 +61,51 @@ test("a folder that is gone says so, rather than looking broken", async ({ page 
   await page.goto("/folders/00000000000000000000000000000000");
   await expect(page.getByText("No such folder.")).toBeVisible({ timeout: 15_000 });
 });
+
+test("a folder's concepts read in the order the material ran, not alphabetically", async ({
+  page,
+}) => {
+  const subject = stamped("Chronology");
+  const folder = stamped("Timeline");
+  const stamp = Date.now() % 1000000;
+  // Deliberately anti-alphabetical: sorted by title this is Alpha, Mid, Zulu.
+  const branch = `Zulu the whole story ${stamp}`;
+  const first = `Mid came first ${stamp}`;
+  const second = `Alpha came second ${stamp}`;
+
+  await page.goto("/bank");
+  await page.getByRole("button", { name: "+ Subject" }).click();
+  await page.getByLabel("New subject").fill(subject);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: `+ Folder in ${subject}` }).click();
+  await page.getByLabel("New folder").fill(folder);
+  await page.getByRole("button", { name: "Add folder" }).click();
+  await expect(page.getByRole("button", { name: `Open ${folder}` })).toBeVisible();
+
+  await page.goto("/");
+  await page
+    .getByLabel("Notes to file")
+    .fill(`${branch}: the arc of it.\n\n${first}: it happened first.\n\n${second}: then this.`);
+  await page.getByLabel("File it into").selectOption({ label: folder });
+  await page.getByRole("button", { name: "Scan for concepts" }).click();
+  await page.getByRole("button", { name: /^Approve and log/ }).click();
+  await expect(page.getByText(/^Filed /)).toBeVisible({ timeout: 20_000 });
+
+  await page.goto("/bank");
+  await page.getByRole("tab", { name: new RegExp(`^${subject} `) }).click();
+  await page.getByRole("link", { name: `View everything in ${folder}` }).click();
+
+  // The page's own order, read off the DOM rather than asserted one at a time.
+  // Waited for first: `allInnerTexts` does not retry, so reading it straight
+  // after the navigation returns [] while the concepts query is still in flight
+  // — and an empty list makes every "is it in order" check vacuously true.
+  const conceptLinks = page.locator('a[href^="/concepts/"]');
+  await expect(conceptLinks).toHaveCount(3, { timeout: 15_000 });
+
+  const titles = await conceptLinks.allInnerTexts();
+  const seen = titles.map((text) => text.split("\n")[0]);
+  const positionOf = (needle: string) => seen.findIndex((line) => line.includes(needle));
+
+  expect(positionOf(branch)).toBe(0);
+  expect(positionOf(first)).toBeLessThan(positionOf(second));
+});

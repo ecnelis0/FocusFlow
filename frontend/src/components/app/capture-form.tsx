@@ -235,6 +235,11 @@ export function CaptureForm() {
             body: draft.body.trim(),
             subject: draft.subject.trim() || null,
             parent_title: draft.parent_title,
+            // Sent back as the reading gave it. The order is the model's, and
+            // nothing on this page edits it yet — dropping it here would file a
+            // map with no sequence at all while the proposal plainly showed one.
+            order: draft.order,
+            when: draft.when,
             existing_id: draft.merge ? draft.existing_id : null,
           })),
         questions: questionDrafts

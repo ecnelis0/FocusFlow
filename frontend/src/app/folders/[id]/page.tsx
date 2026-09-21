@@ -21,6 +21,19 @@ import type { Concept } from "@/lib/types";
  *  A detail whose branch is filed elsewhere is shown at the top level rather
  *  than dropped — the same rule the map follows, for the same reason: this page
  *  claims to hold everything in the folder, so it has to. */
+/** Sibling order: the order the material runs in, then everything it did not
+ *  number. A null is not position zero — a concept the reading declined to place
+ *  must not jump the chronology and claim to come first. The same comparison the
+ *  map uses, so the page and the picture of it agree. */
+function inOrder(a: Concept, b: Concept): number {
+  if (a.sequence !== null && b.sequence !== null && a.sequence !== b.sequence) {
+    return a.sequence - b.sequence;
+  }
+  if (a.sequence !== null && b.sequence === null) return -1;
+  if (a.sequence === null && b.sequence !== null) return 1;
+  return a.title.localeCompare(b.title);
+}
+
 function asTree(concepts: Concept[]): { branch: Concept; details: Concept[] }[] {
   const here = new Set(concepts.map((concept) => concept.id));
   const details = new Map<string, Concept[]>();
@@ -37,10 +50,9 @@ function asTree(concepts: Concept[]): { branch: Concept; details: Concept[] }[] 
 
   const ordered = branches.map((branch) => ({
     branch,
-    details: details.get(branch.id) ?? [],
+    details: (details.get(branch.id) ?? []).sort(inOrder),
   }));
-  // Branches carrying something first: the shape of the folder is the point.
-  ordered.sort((a, b) => b.details.length - a.details.length);
+  ordered.sort((a, b) => inOrder(a.branch, b.branch));
 
   const shown = new Set(ordered.flatMap(({ branch, details }) => [branch.id, ...details.map((d) => d.id)]));
   return [
@@ -56,6 +68,11 @@ function ConceptLine({ concept, detail = false }: { concept: Concept; detail?: b
       href={`/concepts/${concept.id}`}
       className="block rounded-lg px-3 py-2 transition-colors hover:bg-muted/60"
     >
+      {(concept.when_label || concept.sequence !== null) && (
+        <span className="mr-2 text-[0.7rem] font-medium tracking-[0.05em] text-muted-foreground uppercase tabular-nums">
+          {concept.when_label ?? concept.sequence}
+        </span>
+      )}
       <span className={detail ? "text-sm" : "text-[0.95rem] font-medium"}>
         {concept.title}
       </span>
@@ -136,7 +153,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
 
       <Section
         title="Concepts"
-        description="The big ideas in this folder, with what hangs under each. Open one for its description and the questions filed against it."
+        description="The big ideas in this folder, in the order the material runs — chronological where it has a timeline — with what hangs under each. Open one for its description and the questions filed against it."
       >
         {concepts.isPending ? (
           <Skeleton className="h-40 w-full" />

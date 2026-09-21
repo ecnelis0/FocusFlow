@@ -5,6 +5,7 @@ import {
   Controls,
   Handle,
   Position,
+  MarkerType,
   ReactFlow,
   type Edge,
   type Node,
@@ -28,7 +29,7 @@ type ConceptNode = Node<ConceptNodeData, "concept">;
  *  The two are told apart by weight and colour rather than by a label, the way
  *  the middle of a hand-drawn mind map is bigger than the things around it. */
 function ConceptNodeCard({ data }: NodeProps<ConceptNode>) {
-  const { title, questionCount, hasDetails } = data;
+  const { title, questionCount, hasDetails, step, whenLabel } = data;
   return (
     <div
       className={cn(
@@ -41,6 +42,19 @@ function ConceptNodeCard({ data }: NodeProps<ConceptNode>) {
       {/* Both handles on every node, hidden: React Flow needs somewhere to start
           and end an edge, and a branch is a source while a detail is a target. */}
       <Handle type="target" position={Position.Top} className="!opacity-0" />
+      {/* The moment if the material named one, otherwise the position. A step
+          number is the weaker claim of the two, so the date wins when both
+          exist rather than printing "3 · 1763" and making the reader pick. */}
+      {(whenLabel || step !== null) && (
+        <div
+          className={cn(
+            "mb-1 text-[0.65rem] font-medium tracking-[0.06em] uppercase",
+            hasDetails ? "text-primary-foreground/70" : "text-muted-foreground",
+          )}
+        >
+          {whenLabel ?? step}
+        </div>
+      )}
       <div
         className={cn(
           "leading-snug",
@@ -86,10 +100,25 @@ export function ConceptMap({ concepts }: { concepts: Concept[] }) {
       // where it computed a point rather than the card's top-left corner.
       origin: [0.5, 0.5] as [number, number],
     }));
-    const edges: Edge[] = placed.edges.map((edge) => ({
+    // Two different claims, drawn as two different lines. A plain tie hangs a
+    // detail off its branch; an arrowed, accented one says the material runs
+    // from here to there. Drawn identically they would read as one relationship.
+    const edges: Edge[] = placed.edges.map(({ kind, label, ...edge }) => ({
       ...edge,
-      type: "default",
-      style: { strokeWidth: 1.5 },
+      type: kind === "next" ? "smoothstep" : "default",
+      label: label ?? undefined,
+      animated: kind === "next",
+      style:
+        kind === "next"
+          ? { strokeWidth: 2, stroke: "var(--color-primary)" }
+          : { strokeWidth: 1.5, opacity: 0.55 },
+      markerEnd:
+        kind === "next"
+          ? { type: MarkerType.ArrowClosed, color: "var(--color-primary)" }
+          : undefined,
+      labelStyle: { fontSize: 11, fill: "var(--color-muted-foreground)" },
+      labelBgPadding: [4, 2] as [number, number],
+      labelBgStyle: { fill: "var(--color-background)", fillOpacity: 0.9 },
     }));
     return { nodes, edges };
   }, [concepts]);
@@ -102,7 +131,7 @@ export function ConceptMap({ concepts }: { concepts: Concept[] }) {
         nodeTypes={NODE_TYPES}
         onNodeClick={(_event, node) => router.push(`/concepts/${node.id}`)}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
+        fitViewOptions={{ padding: 0.08 }}
         minZoom={0.04}
         maxZoom={1.6}
         nodesDraggable={false}

@@ -80,6 +80,10 @@ class ProposedConcept(BaseModel):
     # The title of the broader concept this sits under, from this same proposal.
     # Null for one of the branches the map is built around.
     parent_title: str | None
+    # Where this sits in the order the material runs, among its own siblings.
+    order: int = 0
+    # What that position is called - "1763", "Step 2" - when the material says.
+    when: str | None = None
     # Where in the notes it came from ("page 3"), when the model could tell.
     where: str | None
     # The existing concept the model says this is, if any. The student can drop it.
@@ -118,6 +122,10 @@ class ApprovedConcept(BaseModel):
     # The title of the concept this nests under - one of the others being approved,
     # or one already in the bank. Resolved by title after every row exists.
     parent_title: str | None = Field(default=None, max_length=200)
+    # The student can reorder before approving, so this comes back from the client
+    # rather than being read off the proposal again.
+    order: int = Field(default=0, ge=0, le=10_000)
+    when: str | None = Field(default=None, max_length=60)
     existing_id: str | None = None
 
 
@@ -311,6 +319,14 @@ async def _file(
                 file_into(target, folder)
             elif target.subject is None and subject:
                 target.subject = subject
+            # Same rule as the folder: an existing concept keeps the place it has
+            # in its own material. A later video mentioning it in passing must not
+            # renumber a sequence built from the notes it actually came from. It
+            # takes one only if it never had one.
+            if target.sequence is None and found.order:
+                target.sequence = found.order
+            if target.when_label is None and found.when:
+                target.when_label = " ".join(found.when.split())[:60] or None
             target.updated_at = utcnow()
             action = "updated"
         else:
@@ -323,6 +339,8 @@ async def _file(
                 title=title,
                 body=found.body.strip(),
                 subject=subject,
+                sequence=found.order or None,
+                when_label=" ".join((found.when or "").split())[:60] or None,
             )
             target.mistakes = []
             target.images = []
@@ -450,6 +468,8 @@ def _propose(extraction: CaptureExtraction, existing: list[Concept]) -> list[Pro
                 body=found.body.strip(),
                 subject=" ".join((found.subject or "").split())[:80] or None,
                 parent_title=parents.get((found.parent_title or "").casefold()),
+                order=found.order,
+                when=" ".join((found.when or "").split())[:60] or None,
                 where=found.where,
                 existing_id=match.id if match else None,
                 existing_title=match.title if match else None,

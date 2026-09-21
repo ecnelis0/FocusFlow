@@ -75,6 +75,22 @@ class ExtractedConcept(BaseModel):
         "itself, and never make a chain longer than one level: every concept is either "
         "an organising one or a detail directly beneath one.",
     )
+    order: int = Field(
+        default=0,
+        description="Where this sits in the order the material runs, counting from 1. "
+        "Chronological when the material has a timeline (the French and Indian War "
+        "before the Proclamation Line before the Stamp Act); the order of the steps "
+        "when it is a method; otherwise what has to be understood first. Number the "
+        "organising concepts 1, 2, 3 among themselves, and number the details 1, 2, 3 "
+        "within their own parent - it is a position among siblings, not a global rank. "
+        "Give every concept one, so the whole map reads in an order.",
+    )
+    when: str | None = Field(
+        default=None,
+        description="What that position is called, if the material says: '1763', "
+        "'1775-1783', 'Step 2', 'Phase 1'. Null when the material is not laid out in "
+        "time or in steps - do not invent dates that are not there.",
+    )
     where: str | None = Field(
         default=None,
         description="Where in the material this came from - 'page 3', 'second "
@@ -199,6 +215,11 @@ class StubExtractor:
                     # The first one found is the branch; everything after it hangs
                     # off that branch. One level deep, never itself.
                     parent_title=concepts[0].title if concepts else None,
+                    # Offline there is no reading to infer an order from, so the
+                    # order the material is written in is the order. Branches count
+                    # from 1 among branches; details from 1 within their branch -
+                    # which here is just their position after the first paragraph.
+                    order=max(1, len(concepts)),
                     existing_title=existing.get(title.casefold()),
                 )
             )
@@ -265,6 +286,20 @@ what the student actually wanted.
 
 If the material genuinely covers one idea only, that is one top-level concept with its \
 details beneath - do not invent branches to fill a map.
+
+**Then put what you found in order, with `order`.** A map that reads in an order is the \
+difference between a pile of facts and a story the student can walk through. For history \
+that order is the calendar: the French and Indian War, then the Proclamation Line, then \
+the Stamp Act, then the war. For a method it is the steps in the order they are carried \
+out. For anything else it is what has to be understood before what. Number the top-level \
+concepts 1, 2, 3 among themselves, and number each branch's details 1, 2, 3 within that \
+branch - a position among its siblings, not a rank across the whole map. Every concept \
+gets one, so nothing is left sitting outside the sequence.
+
+Where the material names the moment - a year, a range, a numbered step - put that in \
+`when`: "1763", "1775-1783", "Step 2". It is the caption on the arrow, and the student \
+sees it. Leave it null rather than inventing a date the material never gave; plenty of \
+material has a real order and no dates at all.
 
 Handwriting may be messy and a transcript may have mis-heard words - read for the \
 meaning and correct obvious errors, but say in the body when a passage was illegible.

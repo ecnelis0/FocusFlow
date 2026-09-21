@@ -36,11 +36,18 @@ def uploads(tmp_path, monkeypatch):
     config.get_settings.cache_clear()
 
 
+# What the page sends back for each concept, including the order the reading gave it.
+KEPT = ("title", "body", "subject", "parent_title", "order", "when", "existing_id")
+
+
 async def approve(client, proposal: dict, **overrides) -> dict:
     """Send the proposal back as-is, the way the page does when nothing is edited."""
     body = {
         "concepts": [
-            {k: c[k] for k in ("title", "body", "subject", "parent_title", "existing_id")}
+            {
+                k: c[k]
+                for k in KEPT
+            }
             for c in proposal["concepts"]
         ],
         "image_filename": proposal["image_filename"],
@@ -306,7 +313,10 @@ async def test_approved_questions_are_logged_and_tagged_under_their_concepts(cli
     proposal = (await client.post("/capture", data={"text": LESSON})).json()
     body = {
         "concepts": [
-            {k: c[k] for k in ("title", "body", "subject", "parent_title", "existing_id")}
+            {
+                k: c[k]
+                for k in KEPT
+            }
             for c in proposal["concepts"]
         ],
         "questions": [
@@ -363,3 +373,88 @@ async def test_approved_questions_are_logged_and_tagged_under_their_concepts(cli
         f"/reviews/{item['review']['id']}/answer", json={"answer": "3 cos(3x)"}
     )
     assert marked.json()["correct"] is True
+
+
+async def test_every_concept_is_proposed_with_a_position_in_the_order(client):
+    """A map that reads in an order needs every concept to have one, not some."""
+    response = await client.post("/capture", data={"text": NOTES})
+    concepts = response.json()["concepts"]
+
+    assert len(concepts) >= 2
+    assert all(c["order"] >= 1 for c in concepts), [c["order"] for c in concepts]
+    # Offline the order is the order the material was written in.
+    assert [c["title"] for c in sorted(concepts, key=lambda c: c["order"])] == [
+        c["title"] for c in concepts
+    ]
+
+
+async def test_approving_files_the_order_onto_the_concepts(client):
+    proposal = (await client.post("/capture", data={"text": NOTES})).json()
+    await approve(client, proposal)
+
+    filed = {c["title"]: c for c in (await client.get("/concepts")).json()}
+    for proposed in proposal["concepts"]:
+        assert filed[proposed["title"]]["sequence"] == proposed["order"]
+
+
+async def test_a_concepts_order_survives_being_mentioned_again(client):
+    """A later video touching a concept in passing must not renumber it.
+
+    The sequence of a branch is built from the material it came from. Letting any
+    subsequent capture overwrite it would mean the order of a folder quietly
+    depended on which video was uploaded last.
+    """
+    proposal = (await client.post("/capture", data={"text": NOTES})).json()
+    await approve(client, proposal)
+    before = {c["title"]: c["sequence"] for c in (await client.get("/concepts")).json()}
+
+    # The same concept again, this time claiming a different position.
+    again = (await client.post("/capture", data={"text": NOTES})).json()
+    await approve(
+        client,
+        again,
+        concepts=[
+            {
+                "title": c["title"],
+                "body": c["body"],
+                "subject": c["subject"],
+                "parent_title": c["parent_title"],
+                "order": 99,
+                "when": "1999",
+                "existing_id": c["existing_id"],
+            }
+            for c in again["concepts"]
+        ],
+    )
+
+    after = {c["title"]: c["sequence"] for c in (await client.get("/concepts")).json()}
+    assert after == before, "a re-capture renumbered concepts that already had an order"
+
+
+async def test_a_concept_with_no_order_yet_can_be_given_one(client):
+    """The other half of that rule: keeping an order is not refusing to gain one."""
+    created = await client.post("/concepts", json={"title": "Osmosis", "body": "Water moves."})
+    assert created.status_code == 201, created.text
+    assert created.json()["sequence"] is None
+
+    response = await client.post("/capture", data={"text": "Osmosis: water follows solute."})
+    proposal = response.json()
+    await approve(
+        client,
+        proposal,
+        concepts=[
+            {
+                "title": "Osmosis",
+                "body": "Water follows solute.",
+                "subject": None,
+                "parent_title": None,
+                "order": 3,
+                "when": "Step 3",
+                "existing_id": created.json()["id"],
+            }
+        ],
+    )
+
+    filed = next(c for c in (await client.get("/concepts")).json() if c["title"] == "Osmosis")
+    assert filed["sequence"] == 3
+    assert filed["when_label"] == "Step 3"

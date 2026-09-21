@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 import { layout } from "@/lib/tree";
 import type { Concept } from "@/lib/types";
 
-function concept(id: string, title: string, parent_id: string | null = null): Concept {
+function concept(
+  id: string,
+  title: string,
+  parent_id: string | null = null,
+  sequence: number | null = null,
+  when_label: string | null = null,
+): Concept {
   return {
     id,
     title,
@@ -13,6 +19,8 @@ function concept(id: string, title: string, parent_id: string | null = null): Co
     subject: "APUSH",
     folder_id: null,
     parent_id,
+    sequence,
+    when_label,
     question_count: 0,
     images: [],
   };
@@ -39,11 +47,13 @@ describe("layout", () => {
     const branches = nodes.filter((node) => node.isBranch).map((node) => node.title);
     expect(branches.sort()).toEqual(["The American Revolution", "The Enlightenment"]);
 
-    expect(edges.map((edge) => `${edge.source}->${edge.target}`).sort()).toEqual([
-      "e->l",
-      "r->p",
-      "r->y",
-    ]);
+    // The parent ties only. "Leads to" is a separate claim with its own edges,
+    // asserted below; counting both here would say a detail hangs off its
+    // predecessor, which is not what the map draws.
+    const ties = edges
+      .filter((edge) => edge.kind === "parent")
+      .map((edge) => `${edge.source}->${edge.target}`);
+    expect(ties.sort()).toEqual(["e->l", "r->p", "r->y"]);
   });
 
   it("places every concept it is given", () => {
@@ -163,5 +173,163 @@ describe("layout", () => {
 
   it("has nothing to draw for no concepts", () => {
     expect(layout([])).toEqual({ nodes: [], edges: [] });
+  });
+});
+
+describe("layout — the order the material runs in", () => {
+  // Deliberately built out of order and with the alphabet fighting the chronology:
+  // sorted by title this is Proclamation, Stamp, War; the years say otherwise.
+  const TIMELINE = [
+    concept("stamp", "The Stamp Act", null, 3, "1765"),
+    concept("war", "The French and Indian War", null, 1, "1754"),
+    concept("proc", "The Proclamation Line", null, 2, "1763"),
+  ];
+
+  it("places the branches in sequence, not alphabetically", () => {
+    const steps = layout(TIMELINE).nodes.map((node) => node.step);
+    const titles = layout(TIMELINE).nodes.map((node) => node.title);
+
+    expect(titles).toEqual([
+      "The French and Indian War",
+      "The Proclamation Line",
+      "The Stamp Act",
+    ]);
+    expect(steps).toEqual([1, 2, 3]);
+  });
+
+  it("draws an arrow from each concept to the one that follows it", () => {
+    const next = layout(TIMELINE).edges.filter((edge) => edge.kind === "next");
+
+    expect(next.map((edge) => [edge.source, edge.target])).toEqual([
+      ["war", "proc"],
+      ["proc", "stamp"],
+    ]);
+    // The caption is the arriving concept's year: an arrow into 1763 says 1763.
+    expect(next.map((edge) => edge.label)).toEqual(["1763", "1765"]);
+  });
+
+  it("orders a branch's details among themselves, and links those too", () => {
+    const branch = [
+      concept("rev", "The American Revolution", null, 1),
+      concept("york", "Yorktown", "rev", 2, "1781"),
+      concept("lex", "Lexington", "rev", 1, "1775"),
+    ];
+    const { nodes, edges } = layout(branch);
+
+    const details = nodes.filter((node) => !node.isBranch).map((node) => node.title);
+    expect(details).toEqual(["Lexington", "Yorktown"]);
+    expect(
+      edges.filter((e) => e.kind === "next").map((e) => [e.source, e.target]),
+    ).toEqual([["lex", "york"]]);
+    // The tie to its branch is a different claim and stays a different edge.
+    expect(edges.filter((e) => e.kind === "parent").map((e) => e.target).sort()).toEqual([
+      "lex",
+      "york",
+    ]);
+  });
+
+  it("an unordered concept goes last rather than first", () => {
+    // Null is not zero. A concept the reading declined to place must not jump
+    // the chronology and claim to come before 1754.
+    const mixed = [
+      concept("loose", "Something unplaced", null, null),
+      concept("war", "The French and Indian War", null, 1, "1754"),
+    ];
+
+    expect(layout(mixed).nodes.map((node) => node.title)).toEqual([
+      "The French and Indian War",
+      "Something unplaced",
+    ]);
+  });
+
+  it("still places every concept when nothing has an order at all", () => {
+    // The whole invariant of this module: ordering must not become a way to
+    // lose a concept that has none.
+    const none = [concept("a", "Alpha"), concept("b", "Beta"), concept("c", "Gamma", "a")];
+    const { nodes } = layout(none);
+
+    expect(nodes.map((node) => node.id).sort()).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("layout — the shape follows the material", () => {
+  const dated = (id: string, n: number) => concept(id, `Event ${id}`, null, n, `17${60 + n}`);
+
+  it("puts a chronology on a line, in order, so the arrows read left to right", () => {
+    // On a ring, 1 → 2 → 3 → 4 sends every arrow back across the middle and the
+    // sequence becomes the least readable thing on the map.
+    const { nodes } = layout([dated("a", 1), dated("b", 2), dated("c", 3), dated("d", 4)]);
+
+    expect(nodes.map((node) => node.y)).toEqual([0, 0, 0, 0]);
+    const xs = nodes.map((node) => node.x);
+    expect([...xs].sort((p, q) => p - q)).toEqual(xs);
+  });
+
+  it("keeps the ring when the material has no order to show", () => {
+    // The hand-drawn picture is still right for a map of themes.
+    const { nodes } = layout([
+      concept("a", "Alpha"),
+      concept("b", "Beta"),
+      concept("c", "Gamma"),
+    ]);
+
+    expect(new Set(nodes.map((node) => node.y)).size).toBeGreaterThan(1);
+  });
+
+  it("one unordered branch does not flip a chronology back to a ring", () => {
+    // Concepts merged in from older notes keep their own absent order, so a
+    // mixed folder is the normal case, not the exotic one.
+    const { nodes } = layout([dated("a", 1), dated("b", 2), concept("c", "Unplaced")]);
+
+    expect(nodes.map((node) => node.y)).toEqual([0, 0, 0]);
+  });
+
+  it("stacks a spine's details in a column, so wide cards cannot overlap", () => {
+    // On an arc they sat ~85px apart while a card is 240px wide, and every
+    // cluster on the map drew on top of itself.
+    const { nodes } = layout([
+      dated("a", 1),
+      dated("b", 2),
+      concept("d1", "Detail one", "a", 1),
+      concept("d2", "Detail two", "a", 2),
+      concept("d3", "Detail three", "a", 3),
+    ]);
+
+    const branch = nodes.find((node) => node.id === "a")!;
+    const column = nodes.filter((node) => !node.isBranch);
+    expect(column.map((node) => node.x)).toEqual([branch.x, branch.x, branch.x]);
+    const ys = column.map((node) => node.y);
+    expect([...ys].sort((p, q) => p - q)).toEqual(ys);
+  });
+
+  it("ties a spine's branch to the head of its column, not to all four at once", () => {
+    // Four ties down one track is four lines on top of each other; the chain
+    // below already says they hang off the same branch.
+    const { edges } = layout([
+      dated("a", 1),
+      dated("b", 2),
+      concept("d1", "Detail one", "a", 1),
+      concept("d2", "Detail two", "a", 2),
+    ]);
+
+    const ties = edges.filter((edge) => edge.kind === "parent");
+    expect(ties.map((edge) => [edge.source, edge.target])).toEqual([["a", "d1"]]);
+    expect(
+      edges.filter((e) => e.kind === "next").map((e) => [e.source, e.target]),
+    ).toContainEqual(["d1", "d2"]);
+  });
+
+  it("hangs a spine's details below it, never on top of the line", () => {
+    const { nodes } = layout([
+      dated("a", 1),
+      dated("b", 2),
+      concept("d1", "Detail one", "a", 1),
+      concept("d2", "Detail two", "a", 2),
+    ]);
+
+    const details = nodes.filter((node) => !node.isBranch);
+    expect(details).toHaveLength(2);
+    // Screen coordinates: below means a larger y than the branch row at 0.
+    for (const detail of details) expect(detail.y).toBeGreaterThan(0);
   });
 });

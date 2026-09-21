@@ -12,6 +12,10 @@ export interface ProposedConcept {
   /** The title of the broader concept in this same proposal that it sits under,
    *  or null for one of the branches the map is built around. */
   parent_title: string | null;
+  /** Its place in the order the material runs, among its siblings. */
+  order: number;
+  /** What that place is called — "1763", "Step 2" — or null. */
+  when: string | null;
   /** Where in the notes it came from ("page 3"), when the model could tell. */
   where: string | null;
   /** The existing concept the model says this is. Dropping it files a new one. */
@@ -60,6 +64,8 @@ export interface ApprovedConcept {
    *  once every row exists, and ignores one it cannot find — so a parent the
    *  student struck out leaves its children at the top rather than unfiled. */
   parent_title: string | null;
+  order: number;
+  when: string | null;
   existing_id: string | null;
 }
 

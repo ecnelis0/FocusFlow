@@ -232,8 +232,23 @@ class Concept(Base):
     parent: Mapped[Concept | None] = relationship(
         back_populates="children", remote_side=[id]
     )
+    # Where this sits in the order the material runs: chronological for history,
+    # procedural for a method, foundations-first otherwise. Numbered among siblings
+    # - branches against branches, details against the details of their own branch -
+    # so it is a position, not a global rank. Null means the reading gave no order,
+    # and every list falls back to the title so the page is still deterministic.
+    sequence: Mapped[int | None] = mapped_column(Integer)
+    # What that position is called, shown to the student: "1763", "1775-1783",
+    # "Step 2". Free text because a period, a date and a step are all answers, and
+    # only the student's material knows which. Null when nothing sensible fits, and
+    # a timeline needs `sequence` regardless - this is the caption, not the key.
+    when_label: Mapped[str | None] = mapped_column(String(60))
+
     children: Mapped[list[Concept]] = relationship(
-        back_populates="parent", order_by="Concept.title"
+        back_populates="parent",
+        # Nulls last: an unordered concept is not concept zero. SQLite has no
+        # NULLS LAST, so order on the `IS NULL` flag first, which it does have.
+        order_by="Concept.sequence.is_(None), Concept.sequence, Concept.title",
     )
 
     mistakes: Mapped[list[Mistake]] = relationship(

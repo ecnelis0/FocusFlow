@@ -53,6 +53,8 @@ def _read(concept: Concept) -> ConceptRead:
         subject=concept.subject,
         folder_id=concept.folder_id,
         parent_id=concept.parent_id,
+        sequence=concept.sequence,
+        when_label=concept.when_label,
         question_count=len(concept.mistakes),
         images=concept.images,
     )
@@ -114,11 +116,17 @@ async def list_concepts(session: SessionDep, user_id: UserDep) -> list[ConceptRe
             subject=concept.subject,
             folder_id=concept.folder_id,
             parent_id=concept.parent_id,
+            sequence=concept.sequence,
+            when_label=concept.when_label,
             question_count=counts.get(concept.id, 0),
             images=concept.images,
         )
         for concept in concepts
     ]
+    # Deliberately not sorted by `sequence`: it is a position among siblings, so
+    # sorting one flat list by it would interleave every branch's first detail with
+    # every other branch's first detail. The folder page and the map know the
+    # grouping and order within it; this list is the busiest concepts first.
     return sorted(reads, key=lambda c: (-c.question_count, c.title.lower()))
 
 
