@@ -1,17 +1,9 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+
+import { logQuestion } from "./helpers";
 
 const QUESTION_IMAGE = "e2e/fixtures/question.png";
 const WORKING_IMAGE = "e2e/fixtures/working.png";
-
-async function logQuestion(page: Page, question: string) {
-  await page.goto("/log");
-  await page.getByLabel("The question").fill(question);
-  await page.getByLabel("You put").fill("B");
-  await page.getByLabel("The answer was").fill("C");
-  await page.getByRole("button", { name: "Just log it" }).click();
-  await expect(page).toHaveURL(/\/bank\/[0-9a-f]{32}/);
-  return page.url();
-}
 
 test("a picture can be attached to a question and zoomed", async ({ page }) => {
   const url = await logQuestion(page, `Picture question ${Date.now() % 100000} [e2e]`);
@@ -86,15 +78,3 @@ test("a file that is not an image is refused with a reason", async ({ page }) =>
   await expect(page.getByText("No pictures yet.")).toBeVisible();
 });
 
-test("a question's picture shows up in the review session", async ({ page }) => {
-  await logQuestion(page, `Reviewable picture ${Date.now() % 100000} [e2e]`);
-  await page.getByLabel("Add a picture").setInputFiles(QUESTION_IMAGE);
-  await expect(page.getByRole("img", { name: "Picture 1 of the question" })).toBeVisible({
-    timeout: 15_000,
-  });
-
-  // Nothing is due yet, so the session is empty - but the component that renders
-  // the picture is the same one, exercised above on the question page.
-  await page.goto("/review");
-  await expect(page.getByText("Nothing is due.")).toBeVisible();
-});

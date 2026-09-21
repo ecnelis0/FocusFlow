@@ -34,7 +34,7 @@ export default function ConceptPage() {
       queryClient.setQueryData(keys.concept(id), updated);
       queryClient.invalidateQueries({ queryKey: ["mistakes"] });
       queryClient.invalidateQueries({ queryKey: keys.concepts() });
-      queryClient.invalidateQueries({ queryKey: keys.stats() });
+      queryClient.invalidateQueries({ queryKey: keys.subjects() });
       toast.success("Untagged.");
     },
     onError: (error: Error) => toast.error(error.message),
@@ -45,7 +45,7 @@ export default function ConceptPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: keys.concepts() });
       queryClient.invalidateQueries({ queryKey: ["mistakes"] });
-      queryClient.invalidateQueries({ queryKey: keys.stats() });
+      queryClient.invalidateQueries({ queryKey: keys.subjects() });
       toast.success("Concept deleted. The questions are untouched.");
       router.push("/concepts");
     },

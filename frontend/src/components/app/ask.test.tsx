@@ -13,15 +13,12 @@ const EMPTY_QUERY: BankQuery = {
   concepts: [],
   tags: [],
   has_concept: null,
-  urgency: [],
-  error_type: [],
   subjects: [],
   topics: [],
   folder_ids: [],
   text: null,
   logged_after: null,
   logged_before: null,
-  only_due: false,
   has_folder: null,
   sort: "newest",
   limit: 25,
@@ -104,7 +101,7 @@ describe("Ask", () => {
 
     await waitFor(() =>
       expect(ask).toHaveBeenCalledWith(
-        "Everything very important from Biology in the past 3 months",
+        "What have I put in from Biology in the past 3 months?",
       ),
     );
   });
@@ -205,18 +202,16 @@ describe("Ask keyboard", () => {
 describe("Ask results", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("labels each hit with its urgency and slot", async () => {
-    vi.spyOn(api, "ask").mockResolvedValue(
-      answer({ mistakes: [makeMistake({ urgency: "fundamental" })] }),
-    );
+  it("labels each hit with where it is filed", async () => {
+    vi.spyOn(api, "ask").mockResolvedValue(answer({ mistakes: [makeMistake()] }));
     const user = userEvent.setup();
 
     renderWithQuery(<Ask />);
-    await user.click(screen.getByRole("button", { name: /due for review now/ }));
+    await user.click(screen.getByRole("button", { name: /what have I put in/i }));
 
     const hit = await screen.findByRole("link");
-    expect(within(hit).getByText("Fundamental concept")).toBeInTheDocument();
-    expect(within(hit).getByText(/Careless arithmetic/)).toBeInTheDocument();
+    expect(within(hit).getByText(/Algebra/)).toBeInTheDocument();
+    expect(within(hit).getByText(/linear equations/)).toBeInTheDocument();
   });
 
   it("names the subject when the question has one, and nothing when it does not", async () => {
@@ -224,14 +219,14 @@ describe("Ask results", () => {
       answer({
         mistakes: [
           makeMistake({ id: "a", subject: "Biology" }),
-          makeMistake({ id: "b", subject: null, error_type: null }),
+          makeMistake({ id: "b", subject: null, topic: null }),
         ],
       }),
     );
     const user = userEvent.setup();
 
     renderWithQuery(<Ask />);
-    await user.click(screen.getByRole("button", { name: /due for review now/ }));
+    await user.click(screen.getByRole("button", { name: /what have I put in/i }));
 
     const [withSubject, without] = await screen.findAllByRole("link");
     expect(within(withSubject).getByText(/Biology/)).toBeInTheDocument();

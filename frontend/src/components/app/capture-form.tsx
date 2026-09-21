@@ -280,7 +280,7 @@ export function CaptureForm() {
       queryClient.invalidateQueries({ queryKey: keys.concepts() });
       // The folder's counts just changed, and the bank draws its strip from them.
       queryClient.invalidateQueries({ queryKey: keys.subjects() });
-      queryClient.invalidateQueries({ queryKey: keys.stats() });
+      queryClient.invalidateQueries({ queryKey: keys.subjects() });
       queryClient.invalidateQueries({ queryKey: ["mistakes"] });
       queryClient.invalidateQueries({ queryKey: ["reviews"] });
       const count = outcome.changes.length;

@@ -60,7 +60,7 @@ export function ConceptForm({
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: keys.concepts() });
       queryClient.invalidateQueries({ queryKey: keys.concept(saved.id) });
-      queryClient.invalidateQueries({ queryKey: keys.stats() });
+      queryClient.invalidateQueries({ queryKey: keys.subjects() });
       if (!concept) {
         setTitle("");
         setBody("");

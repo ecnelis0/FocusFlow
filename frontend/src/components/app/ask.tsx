@@ -4,17 +4,18 @@ import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 
-import { UrgencyBadge } from "@/components/app/urgency-badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
-import { ERROR_TYPE_LABELS } from "@/lib/labels";
 import type { Answer, Mistake } from "@/lib/types";
 
+// Phrased as things this bank can actually answer. Two of these used to ask
+// about urgency and the review queue, which no longer exist - an example the
+// assistant must fail at is worse than no example.
 const EXAMPLES = [
-  "Everything very important from Biology in the past 3 months",
-  "What is due for review now?",
-  "Which concept gaps keep coming back?",
+  "What have I put in from Biology in the past 3 months?",
+  "Which concepts have the most questions under them?",
+  "Show me everything on cell transport",
 ];
 
 function Hit({ mistake }: { mistake: Mistake }) {
@@ -24,12 +25,9 @@ function Hit({ mistake }: { mistake: Mistake }) {
       className="block rounded-lg border px-3 py-2 transition-colors hover:bg-muted/50"
     >
       <div className="mb-1 flex flex-wrap items-center gap-1.5">
-        {mistake.urgency && <UrgencyBadge urgency={mistake.urgency} />}
-        {(mistake.subject || mistake.error_type) && (
+        {(mistake.subject || mistake.topic) && (
           <span className="text-[11px] text-muted-foreground">
-            {[mistake.subject, mistake.error_type && ERROR_TYPE_LABELS[mistake.error_type]]
-              .filter(Boolean)
-              .join(" · ")}
+            {[mistake.subject, mistake.topic].filter(Boolean).join(" · ")}
           </span>
         )}
       </div>

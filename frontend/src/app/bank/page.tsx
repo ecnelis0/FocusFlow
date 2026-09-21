@@ -7,12 +7,13 @@ import { Suspense, useMemo, useState } from "react";
 import { ConceptHeader } from "@/components/app/concept-header";
 import { Empty } from "@/components/app/empty";
 import { FolderGrid } from "@/components/app/folder-grid";
+import { MaterialList } from "@/components/app/material-list";
 import { MistakeCard } from "@/components/app/mistake-card";
 import { PageHeader } from "@/components/app/page-header";
+import { Section } from "@/components/app/section";
 import { SubjectTabs } from "@/components/app/subject-tabs";
-import { useSubjectTree } from "@/components/app/use-subjects";
 import { Unreachable } from "@/components/app/unreachable";
-import { UrgencyBadge } from "@/components/app/urgency-badge";
+import { useSubjectTree } from "@/components/app/use-subjects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,13 +27,11 @@ import {
   type Facets,
   NO_FACETS,
 } from "@/lib/facets";
-import { ERROR_TYPE_LABELS, URGENCY_LABELS } from "@/lib/labels";
-import type { ErrorType, Urgency } from "@/lib/types";
 
 /** One selected facet, with the click that removes it.
  *
  *  `name` exists because `label` may be a badge rather than a string, and every
- *  one of these buttons used to answer to "Remove filter" — six identical
+ *  one of these buttons used to answer to "Remove filter" — identical
  *  accessible names on one row, which tells a screen reader nothing about which
  *  filter it is about to drop and leaves a test no way to name one either. */
 function Pill({
@@ -63,8 +62,8 @@ function BankList() {
   const router = useRouter();
   const params = useSearchParams();
 
-  // The URL is the single source of truth for the facets, so a filtered view is a
-  // link, and arriving from the rail or the dashboard needs no syncing effect.
+  // The URL is the single source of truth for the facets, so a filtered view is
+  // a link, and arriving from elsewhere needs no syncing effect.
   const selected = useMemo(() => fromSearchParams(params), [params]);
   const [text, setText] = useState(() => params.get("q") ?? "");
   const facets: Facets = { ...selected, text };
@@ -76,14 +75,13 @@ function BankList() {
   };
 
   const { data: subjects } = useSubjectTree();
-  // One subject in the URL is a tab; two or more is a filter the rail built, and
-  // no tab can represent it, so the strip falls back to All rather than lying.
+  // One subject in the URL is a tab; two or more is a filter no tab can
+  // represent, so the strip falls back to All rather than lying.
   const tab = selected.subjects.length === 1 ? selected.subjects[0] : null;
   const openSubject = subjects?.find((subject) => subject.name === tab) ?? null;
 
   const selectSubject = (name: string | null) =>
-    // Folders belong to the subject being left, so they go with it. Everything
-    // else the rail set is kept: a tab narrows a filter, it does not replace one.
+    // Folders belong to the subject being left, so they go with it.
     apply({
       ...facets,
       subjects: name === null ? [] : [name],
@@ -92,18 +90,10 @@ function BankList() {
     });
 
   const selectFolder = (folderId: string | null) =>
-    apply({
-      ...facets,
-      folder_ids: folderId === null ? [] : [folderId],
-      hasFolder: null,
-    });
+    apply({ ...facets, folder_ids: folderId === null ? [] : [folderId], hasFolder: null });
 
   const selectUnfiled = () =>
-    apply({
-      ...facets,
-      folder_ids: [],
-      hasFolder: facets.hasFolder === false ? null : false,
-    });
+    apply({ ...facets, folder_ids: [], hasFolder: facets.hasFolder === false ? null : false });
 
   // Only to label the concept pills: an id in the URL means nothing to read.
   const { data: concepts } = useQuery({
@@ -113,59 +103,52 @@ function BankList() {
   });
   const conceptTitle = (id: string) =>
     concepts?.find((concept) => concept.id === id)?.title ?? "concept";
-  // A folder id in the URL is as unreadable as a concept id. Look it up across
-  // every subject, not just the open one: the rail can outlive a tab change.
   const folderName = (id: string) =>
-    subjects
-      ?.flatMap((subject) => subject.folders)
-      .find((folder) => folder.id === id)?.name ?? "folder";
+    subjects?.flatMap((subject) => subject.folders).find((folder) => folder.id === id)?.name ??
+    "folder";
+
+  const openFolder =
+    openSubject?.folders.find((folder) => folder.id === facets.folder_ids[0]) ?? null;
+
+  // Searching is a different question from browsing. Browsing asks "what have I
+  // put in here" and is answered by the materials; searching asks "where is that
+  // question" and is answered by rows. Showing both at once would be two answers
+  // to whichever one was actually asked. A folder on its own is browsing.
+  const searching =
+    facets.text.trim() !== "" ||
+    facets.concept_ids.length > 0 ||
+    facets.tags.length > 0 ||
+    facets.topics.length > 0 ||
+    facets.hasConcept !== null ||
+    facets.hasFolder !== null;
 
   const query = toQuery(facets);
   const { data, isPending, isError, error } = useQuery({
     queryKey: keys.search(query),
     queryFn: () => api.searchMistakes(query),
+    enabled: searching,
   });
 
   const filtering = !isEmpty(facets);
 
-  // A concept with nothing tagged returns an empty bank, which is correct and reads
-  // exactly like a broken filter. Say which concept, and offer the way out.
+  // A concept with nothing tagged returns an empty bank, which is correct and
+  // reads exactly like a broken filter. Name it, and offer the way out.
   const onlyEmptyConcept =
     facets.concept_ids.length === 1 &&
-    facets.urgency.length === 0 &&
     facets.subjects.length === 0 &&
-    facets.error_type.length === 0 &&
     facets.topics.length === 0 &&
+    facets.tags.length === 0 &&
     facets.folder_ids.length === 0 &&
     facets.hasFolder === null &&
     facets.hasConcept === null &&
     !facets.text.trim();
 
-  const openFolder =
-    openSubject?.folders.find((folder) => folder.id === facets.folder_ids[0]) ?? null;
-  // A folder you just made is empty, which is right and reads exactly like a
-  // broken filter. Name it, and say what putting something in it looks like.
-  const onlyEmptyFolder = openFolder !== null && facets.concept_ids.length === 0;
-
-  const emptyTitle = onlyEmptyFolder
-    ? `Nothing is in \u201c${openFolder.name}\u201d yet.`
-    : onlyEmptyConcept
-    ? `Nothing is tagged with \u201c${conceptTitle(facets.concept_ids[0])}\u201d yet.`
-    : filtering
-      ? "Nothing matches all of those."
-      : "Nothing here.";
-
-  const emptyBody = onlyEmptyFolder
-    ? `The folder exists \u2014 nothing has been filed into it. Scan a video or some notes and pick ${openFolder.name} as its folder, or move a question into it from its own page.`
-    : onlyEmptyConcept
-    ? "The concept exists \u2014 no question has been filed under it. Open it and tag some, or tag from a question\u2019s own page."
-    : filtering
-      ? "The filters narrow each other, so a question has to satisfy every one. Drop one and see."
-      : "No question in the bank yet.";
-
   return (
     <div className="space-y-6">
-      <PageHeader title="The bank" />
+      <PageHeader
+        title="The bank"
+        lede="Your subjects, the folders inside them, and everything you have put into each."
+      />
 
       <SubjectTabs
         subjects={subjects ?? []}
@@ -203,21 +186,11 @@ function BankList() {
           ))}
           {facets.hasConcept !== null && (
             <Pill
-              label={
-                facets.hasConcept ? "Filed under a concept" : "No concept yet"
-              }
+              label={facets.hasConcept ? "Filed under a concept" : "No concept yet"}
               name={facets.hasConcept ? "Filed under a concept" : "No concept yet"}
               onRemove={() => apply({ ...facets, hasConcept: null })}
             />
           )}
-          {facets.urgency.map((value) => (
-            <Pill
-              key={value}
-              label={<UrgencyBadge urgency={value as Urgency} />}
-              name={URGENCY_LABELS[value as Urgency] ?? value}
-              onRemove={() => apply(toggle(facets, "urgency", value))}
-            />
-          ))}
           {facets.subjects.map((value) => (
             <Pill
               key={value}
@@ -226,20 +199,20 @@ function BankList() {
               onRemove={() => apply(toggle(facets, "subjects", value))}
             />
           ))}
-          {facets.error_type.map((value) => (
-            <Pill
-              key={value}
-              label={ERROR_TYPE_LABELS[value as ErrorType] ?? value}
-              name={ERROR_TYPE_LABELS[value as ErrorType] ?? value}
-              onRemove={() => apply(toggle(facets, "error_type", value))}
-            />
-          ))}
           {facets.topics.map((value) => (
             <Pill
               key={value}
               label={value}
               name={value}
               onRemove={() => apply(toggle(facets, "topics", value))}
+            />
+          ))}
+          {facets.tags.map((value) => (
+            <Pill
+              key={value}
+              label={value}
+              name={value}
+              onRemove={() => apply(toggle(facets, "tags", value))}
             />
           ))}
           {facets.folder_ids.map((value) => (
@@ -268,39 +241,65 @@ function BankList() {
         <ConceptHeader conceptId={selected.concept_ids[0]} />
       )}
 
-      {isPending ? (
-        <div className="space-y-3">
-          <Skeleton className="h-28 w-full" />
-          <Skeleton className="h-28 w-full" />
-        </div>
-      ) : isError ? (
-        <Unreachable error={error as Error} />
-      ) : data && data.length > 0 ? (
-        <>
-          <p className="text-sm text-muted-foreground">
-            {data.length} question{data.length === 1 ? "" : "s"}
-          </p>
+      {searching ? (
+        isPending ? (
           <div className="space-y-3">
-            {data.map((mistake) => (
-              <MistakeCard key={mistake.id} mistake={mistake} />
-            ))}
+            <Skeleton className="h-28 w-full" />
+            <Skeleton className="h-28 w-full" />
           </div>
-        </>
+        ) : isError ? (
+          <Unreachable error={error as Error} />
+        ) : data && data.length > 0 ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              {data.length} question{data.length === 1 ? "" : "s"}
+            </p>
+            <div className="space-y-3">
+              {data.map((mistake) => (
+                <MistakeCard key={mistake.id} mistake={mistake} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <Empty
+            title={
+              onlyEmptyConcept
+                ? `Nothing is tagged with “${conceptTitle(facets.concept_ids[0])}” yet.`
+                : "Nothing matches all of those."
+            }
+            body={
+              onlyEmptyConcept
+                ? "The concept exists — no question has been filed under it."
+                : "The filters narrow each other, so a question has to satisfy every one. Drop one and see."
+            }
+            action={
+              onlyEmptyConcept
+                ? { href: `/concepts/${facets.concept_ids[0]}`, label: "Open the concept" }
+                : { href: "/", label: "Add material" }
+            }
+          />
+        )
+      ) : openFolder ? (
+        <Section
+          title={`In ${openFolder.name}`}
+          description="Everything you have put into this folder, newest first. Open one to see the concepts and questions it produced."
+        >
+          <MaterialList folderId={openFolder.id} />
+        </Section>
+      ) : tab ? (
+        <Section
+          title={`Everything in ${tab}`}
+          description="Across every folder in this subject. Pick a folder above to narrow it."
+        >
+          <MaterialList subject={tab} />
+        </Section>
       ) : (
-        <Empty
-          title={emptyTitle}
-          body={emptyBody}
-          action={
-            onlyEmptyFolder
-              ? { href: "/", label: "Put some material into it" }
-              : onlyEmptyConcept
-                ? {
-                    href: `/concepts/${facets.concept_ids[0]}`,
-                    label: "Tag questions with it",
-                  }
-                : { href: "/log", label: "Log a miss" }
-          }
-        />
+        <Section
+          title="Everything you have put in"
+          description="Newest first, across every subject. Pick a subject above to narrow it."
+        >
+          <MaterialList />
+        </Section>
       )}
     </div>
   );
@@ -308,7 +307,7 @@ function BankList() {
 
 export default function BankPage() {
   return (
-    <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+    <Suspense fallback={<Skeleton className="h-96 w-full" />}>
       <BankList />
     </Suspense>
   );

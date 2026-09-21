@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { logQuestion } from "./helpers";
+
 /** The specs share one database and run in a single worker, so nothing here may
  *  assume the bank lacks something — every name is stamped, and every assertion
  *  is about the thing this test made. */
@@ -61,13 +63,8 @@ test("a question filed into a folder appears there and nowhere else", async ({ p
   await addFolder(page, subject, folder);
   await addFolder(page, subject, other);
 
-  // Log the question, then file it into the folder from its own page.
-  await page.goto("/log");
-  await page.getByLabel("The question").fill(question);
-  await page.getByLabel("You put").fill("2 m/s");
-  await page.getByLabel("The answer was").fill("3 m/s");
-  await page.getByRole("button", { name: "Just log it" }).click();
-  await expect(page).toHaveURL(/\/bank\/[0-9a-f]{32}/);
+  // Put it in through Study, then file it from its own page.
+  await logQuestion(page, question);
 
   await page.getByLabel("Folder").selectOption({ label: folder });
   await expect(page.getByText(`Filed in ${folder}`)).toBeVisible();
@@ -92,11 +89,7 @@ test("deleting a folder keeps the question, in the subject, unfiled", async ({ p
   await addSubject(page, subject);
   await addFolder(page, subject, folder);
 
-  await page.goto("/log");
-  await page.getByLabel("The question").fill(question);
-  await page.getByLabel("You put").fill("Chloroplast");
-  await page.getByLabel("The answer was").fill("Mitochondrion");
-  await page.getByRole("button", { name: "Just log it" }).click();
+  await logQuestion(page, question);
   await page.getByLabel("Folder").selectOption({ label: folder });
   await expect(page.getByText(`Filed in ${folder}`)).toBeVisible();
 

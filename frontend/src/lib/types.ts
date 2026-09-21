@@ -1,39 +1,5 @@
 /** Mirrors `backend/app/schemas.py`. Keep the two in step. */
 
-export const ERROR_TYPES = [
-  "careless_arithmetic",
-  "misread_question",
-  "concept_gap",
-  "formula_error",
-  "algebra_slip",
-  "unit_or_conversion",
-  "trap_answer",
-  "vocabulary_gap",
-  "time_pressure_guess",
-  "other",
-] as const;
-export type ErrorType = (typeof ERROR_TYPES)[number];
-
-export type Difficulty = "easy" | "medium" | "hard";
-
-/** How badly a question needs revisiting. Ordered most urgent first. */
-export const URGENCIES = ["fundamental", "very_important", "important"] as const;
-export type Urgency = (typeof URGENCIES)[number];
-export type AnalysisStatus = "not_requested" | "pending" | "ready" | "failed";
-export type ReviewOutcome = "correct" | "wrong" | "skipped" | "superseded";
-/** What the student can actually answer with. `superseded` is the ladder's own. */
-export type StudentOutcome = Exclude<ReviewOutcome, "superseded">;
-
-export interface ReviewEvent {
-  id: string;
-  cycle: number;
-  step_index: number;
-  interval_label: string;
-  due_at: string;
-  completed_at: string | null;
-  outcome: ReviewOutcome | null;
-}
-
 export interface TagCount {
   tag: string;
   count: number;
@@ -132,70 +98,15 @@ export interface Mistake {
   source: string | null;
   question_text: string;
   choices: string[] | null;
-  your_answer: string;
   correct_answer: string;
   student_note: string | null;
-
-  analysis_status: AnalysisStatus;
-  analysis_error: string | null;
-  analyzed_at: string | null;
-  analyzed_by: string | null;
-  analysis_edited_at: string | null;
-  error_type: ErrorType | null;
   topic: string | null;
-  difficulty: Difficulty | null;
-  urgency: Urgency | null;
-  urgency_is_yours: boolean;
-  why_wrong: string | null;
-  correct_reasoning: string | null;
-  takeaway: string | null;
-  trap: string | null;
   tags: string[] | null;
+  /** The upload this came out of, or null for one that predates materials. */
+  material_id: string | null;
 
-  reviews: ReviewEvent[];
   concepts: ConceptSummary[];
   images: MistakeImage[];
-}
-
-export interface DueReview {
-  review: ReviewEvent;
-  mistake: Mistake;
-}
-
-export interface ReviewCompleteResult {
-  review: ReviewEvent;
-  ladder_restarted: boolean;
-  next_due_at: string | null;
-}
-
-/** The server's verdict on an answer the student typed or picked. */
-export interface ReviewAnswerResult extends ReviewCompleteResult {
-  correct: boolean;
-  your_answer: string;
-  correct_answer: string;
-}
-
-export interface SlotCount {
-  key: string;
-  count: number;
-}
-
-export interface TopicCount {
-  subject: string | null;
-  topic: string;
-  count: number;
-}
-
-export interface Stats {
-  total_mistakes: number;
-  due_now: number;
-  untagged_questions: number;
-  reviews_completed: number;
-  by_error_type: SlotCount[];
-  by_urgency: SlotCount[];
-  by_concept: SlotCount[];
-  by_subject: SlotCount[];
-  topics: TopicCount[];
 }
 
 /** Every field is editable; only the keys sent are changed. */
@@ -207,37 +118,26 @@ export type MistakeEdit = Partial<
     | "source"
     | "question_text"
     | "choices"
-    | "your_answer"
     | "correct_answer"
     | "student_note"
-    | "error_type"
     | "topic"
-    | "difficulty"
-    | "urgency"
-    | "why_wrong"
-    | "correct_reasoning"
-    | "takeaway"
-    | "trap"
     | "tags"
   >
 >;
 
-export type BankSort = "newest" | "oldest" | "most_urgent";
+export type BankSort = "newest" | "oldest";
 
 /** Mirrors `backend/app/query.py`. The assistant's reading of your sentence. */
 export interface BankQuery {
   concept_ids: string[];
   concepts: string[];
   tags: string[];
-  urgency: Urgency[];
-  error_type: ErrorType[];
   subjects: string[];
   topics: string[];
   folder_ids: string[];
   text: string | null;
   logged_after: string | null;
   logged_before: string | null;
-  only_due: boolean;
   has_concept: boolean | null;
   /** False for questions in a subject but in none of its folders. */
   has_folder: boolean | null;
@@ -259,11 +159,9 @@ export interface Answer {
 export interface MistakeDraft {
   subject?: string | null;
   folder_id?: string | null;
-  urgency?: Urgency | null;
   concept_ids?: string[];
   tags?: string[];
   question_text: string;
-  your_answer: string;
   correct_answer: string;
   choices?: string[] | null;
   source?: string | null;
@@ -280,4 +178,30 @@ export interface ScannedQuestion {
   subject?: string | null;
   source?: string | null;
   note?: string | null;
+}
+
+/** One thing you put in: a PDF, a video, a recording, a page of notes.
+ *
+ *  The receipt for a capture. A folder lists these rather than one pooled heap
+ *  of concepts, because "what have I put in here" is the question you ask when
+ *  you come back to a unit a month later. */
+export interface Material {
+  id: string;
+  created_at: string;
+  title: string;
+  /** "pdf" | "image" | "text" | "audio" | "video" — free text on the server, so
+   *  a new kind needs no migration and no change here. */
+  kind: string;
+  source: string | null;
+  summary: string | null;
+  subject: string | null;
+  folder_id: string | null;
+  concept_count: number;
+  question_count: number;
+}
+
+/** A material opened: everything that came out of that one upload. */
+export interface MaterialDetail extends Material {
+  concepts: Concept[];
+  questions: Mistake[];
 }

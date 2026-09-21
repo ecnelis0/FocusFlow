@@ -2,61 +2,46 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MistakeCard } from "@/components/app/mistake-card";
-import { makeLadder, makeMistake } from "@/test/fixtures";
+import { makeMistake } from "@/test/fixtures";
 
 describe("MistakeCard", () => {
-  it("shows the slot the AI filed this under", () => {
+  it("shows where the question is filed, and what it asks", () => {
     render(<MistakeCard mistake={makeMistake()} />);
 
-    // One metadata line: subject · slot · topic, so match within it.
+    // One metadata line: subject · topic, so match within it.
     expect(screen.getByText(/Algebra/)).toBeInTheDocument();
-    expect(screen.getByText(/Careless arithmetic/)).toBeInTheDocument();
     expect(screen.getByText(/linear equations/)).toBeInTheDocument();
+    expect(screen.getByText(/If 3x \+ 7 = 22/)).toBeInTheDocument();
   });
 
   it("leaves the subject out of the metadata line when there is none", () => {
     render(<MistakeCard mistake={makeMistake({ subject: null })} />);
 
-    expect(screen.getByText("Careless arithmetic · linear equations")).toBeInTheDocument();
+    expect(screen.getByText("linear equations")).toBeInTheDocument();
     expect(screen.queryByText(/Algebra/)).not.toBeInTheDocument();
   });
 
-  it("says a review is due rather than counting down to it", () => {
-    render(<MistakeCard mistake={makeMistake({ reviews: makeLadder(2) })} />);
-
-    expect(screen.getByText("due now")).toBeInTheDocument();
-  });
-
-  it("counts down to the next rung when nothing is due", () => {
+  it("shows the answer on the card rather than behind a reveal", () => {
+    // Nothing tests you any more, so hiding it only costs a click on the way to
+    // reading it.
     render(<MistakeCard mistake={makeMistake()} />);
 
-    expect(screen.getByText(/^in /)).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
   });
 
-  it("says a hand-logged question is waiting, not that it is being analysed", () => {
-    // "analysing…" on a question nobody asked the AI about is a lie about state.
+  it("names every concept the question is filed under", () => {
     render(
       <MistakeCard
         mistake={makeMistake({
-          analysis_status: "not_requested",
-          error_type: null,
-          topic: null,
-          urgency: null,
+          concepts: [
+            { id: "c1", title: "Solve before you pick" },
+            { id: "c2", title: "Isolate the variable" },
+          ],
         })}
       />,
     );
 
-    expect(screen.getByText("no debrief yet")).toBeInTheDocument();
-    expect(screen.queryByText("analysing…")).not.toBeInTheDocument();
-  });
-
-  it("does not claim a slot while the analysis is still running", () => {
-    render(
-      <MistakeCard
-        mistake={makeMistake({ analysis_status: "pending", error_type: null, topic: null })}
-      />,
-    );
-
-    expect(screen.getByText("analysing…")).toBeInTheDocument();
+    expect(screen.getByText("Solve before you pick")).toBeInTheDocument();
+    expect(screen.getByText("Isolate the variable")).toBeInTheDocument();
   });
 });

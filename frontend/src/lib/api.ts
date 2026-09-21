@@ -4,20 +4,14 @@ import type {
   Concept,
   ConceptDetail,
   ConceptDraft,
-  DueReview,
-  ErrorType,
   Folder,
+  Material,
+  MaterialDetail,
   Mistake,
-  MistakeDraft,
   MistakeEdit,
-  ReviewAnswerResult,
-  ReviewCompleteResult,
   ScannedQuestion,
-  Stats,
-  StudentOutcome,
   Subject,
   TagCount,
-  Urgency,
 } from "./types";
 
 export const API_URL =
@@ -75,8 +69,6 @@ async function postForm<T>(path: string, body: FormData): Promise<T> {
 }
 
 export interface MistakeFilters {
-  error_type?: ErrorType;
-  urgency?: Urgency;
   subject?: string;
   topic?: string;
   q?: string;
@@ -92,13 +84,6 @@ function query(filters: MistakeFilters): string {
 }
 
 export const api = {
-  /** `analyze: false` logs the question and leaves the debrief to be asked for later. */
-  logMistake: (draft: MistakeDraft, analyze = true) =>
-    request<Mistake>(`/mistakes?analyze=${analyze}`, {
-      method: "POST",
-      body: JSON.stringify(draft),
-    }),
-
   updateMistake: (id: string, edit: MistakeEdit) =>
     request<Mistake>(`/mistakes/${id}`, { method: "PATCH", body: JSON.stringify(edit) }),
 
@@ -114,28 +99,7 @@ export const api = {
 
   getMistake: (id: string) => request<Mistake>(`/mistakes/${id}`),
 
-  /** Ask the AI to debrief this question. `force` overwrites an analysis you edited. */
-  analyze: (id: string, force = false) =>
-    request<Mistake>(`/mistakes/${id}/analyze?force=${force}`, { method: "POST" }),
-
   deleteMistake: (id: string) => request<void>(`/mistakes/${id}`, { method: "DELETE" }),
-
-  dueReviews: () => request<DueReview[]>("/reviews/due"),
-
-  upcomingReviews: () => request<DueReview[]>("/reviews/upcoming"),
-
-  /** Answer the question; the server marks it and moves the ladder. */
-  answerReview: (id: string, answer: string) =>
-    request<ReviewAnswerResult>(`/reviews/${id}/answer`, {
-      method: "POST",
-      body: JSON.stringify({ answer }),
-    }),
-
-  completeReview: (id: string, outcome: StudentOutcome) =>
-    request<ReviewCompleteResult>(`/reviews/${id}/complete`, {
-      method: "POST",
-      body: JSON.stringify({ outcome }),
-    }),
 
   /** Read a picture of a question and get the log form back, filled in. Writes
    *  nothing: the student checks it and logs it themselves. */
@@ -250,7 +214,13 @@ export const api = {
 
   deleteFolder: (id: string) => request<void>(`/folders/${id}`, { method: "DELETE" }),
 
-  stats: () => request<Stats>("/stats"),
+  /** What you have put in, newest first. Narrowed to a folder, this is what a
+   *  folder lists. */
+  listMaterials: (filters: { folder_id?: string; subject?: string } = {}) =>
+    request<Material[]>(`/materials${query(filters)}`),
+
+  /** One material opened: the concepts and questions that came out of it. */
+  getMaterial: (id: string) => request<MaterialDetail>(`/materials/${id}`),
 
   /** Ask a question about the bank. The model writes the filter; the rows are real. */
   ask: (question: string) =>
@@ -262,9 +232,9 @@ export const keys = {
   mistakes: (filters: MistakeFilters = {}) => ["mistakes", filters] as const,
   search: (query: Partial<BankQuery>) => ["mistakes", "search", query] as const,
   mistake: (id: string) => ["mistake", id] as const,
-  due: () => ["reviews", "due"] as const,
-  upcoming: () => ["reviews", "upcoming"] as const,
-  stats: () => ["stats"] as const,
+  materials: (filters: { folder_id?: string; subject?: string } = {}) =>
+    ["materials", filters] as const,
+  material: (id: string) => ["material", id] as const,
   concepts: () => ["concepts"] as const,
   subjects: () => ["subjects"] as const,
   tags: () => ["tags"] as const,

@@ -1,4 +1,4 @@
-import type { BankQuery, ErrorType, Urgency } from "./types";
+import type { BankQuery } from "./types";
 
 /** The facets the bank can be sliced by. Each holds a list: OR inside, AND across. */
 export interface Facets {
@@ -6,9 +6,7 @@ export interface Facets {
   tags: string[];
   /** true = only questions with a concept, false = only those without. */
   hasConcept: boolean | null;
-  urgency: Urgency[];
   subjects: string[];
-  error_type: ErrorType[];
   topics: string[];
   /** Topic folders. Set by the folder cards on the bank, not by the rail. */
   folder_ids: string[];
@@ -21,9 +19,7 @@ export const NO_FACETS: Facets = {
   concept_ids: [],
   tags: [],
   hasConcept: null,
-  urgency: [],
   subjects: [],
-  error_type: [],
   topics: [],
   folder_ids: [],
   hasFolder: null,
@@ -35,9 +31,7 @@ export function isEmpty(facets: Facets): boolean {
     facets.tags.length === 0 &&
     facets.hasConcept === null &&
     facets.concept_ids.length === 0 &&
-    facets.urgency.length === 0 &&
     facets.subjects.length === 0 &&
-    facets.error_type.length === 0 &&
     facets.topics.length === 0 &&
     facets.folder_ids.length === 0 &&
     facets.hasFolder === null &&
@@ -50,9 +44,7 @@ export function countSelected(facets: Facets): number {
     facets.tags.length +
     (facets.hasConcept === null ? 0 : 1) +
     facets.concept_ids.length +
-    facets.urgency.length +
     facets.subjects.length +
-    facets.error_type.length +
     facets.topics.length +
     facets.folder_ids.length +
     (facets.hasFolder === null ? 0 : 1)
@@ -61,14 +53,7 @@ export function countSelected(facets: Facets): number {
 
 /** Add or remove one value, leaving the other facets alone. */
 export function toggle<
-  K extends
-    | "urgency"
-    | "subjects"
-    | "error_type"
-    | "topics"
-    | "concept_ids"
-    | "tags"
-    | "folder_ids",
+  K extends "subjects" | "topics" | "concept_ids" | "tags" | "folder_ids",
 >(
   facets: Facets,
   key: K,
@@ -92,9 +77,7 @@ export function toSearchParams(facets: Facets): URLSearchParams {
   for (const value of facets.concept_ids) params.append("concept", value);
   for (const value of facets.tags) params.append("tag", value);
   if (facets.hasConcept !== null) params.set("tagged", facets.hasConcept ? "1" : "0");
-  for (const value of facets.urgency) params.append("urgency", value);
   for (const value of facets.subjects) params.append("subject", value);
-  for (const value of facets.error_type) params.append("error_type", value);
   for (const value of facets.topics) params.append("topic", value);
   for (const value of facets.folder_ids) params.append("folder", value);
   if (facets.hasFolder !== null) params.set("filed", facets.hasFolder ? "1" : "0");
@@ -107,9 +90,7 @@ export function fromSearchParams(params: URLSearchParams | ReadonlyURLSearchPara
     concept_ids: params.getAll("concept"),
     tags: params.getAll("tag"),
     hasConcept: params.get("tagged") === null ? null : params.get("tagged") === "1",
-    urgency: params.getAll("urgency") as Urgency[],
     subjects: params.getAll("subject"),
-    error_type: params.getAll("error_type") as ErrorType[],
     topics: params.getAll("topic"),
     folder_ids: params.getAll("folder"),
     hasFolder: params.get("filed") === null ? null : params.get("filed") === "1",
@@ -128,9 +109,7 @@ export function toQuery(facets: Facets): Partial<BankQuery> {
     concept_ids: facets.concept_ids,
     tags: facets.tags,
     has_concept: facets.hasConcept,
-    urgency: facets.urgency,
     subjects: facets.subjects,
-    error_type: facets.error_type,
     topics: facets.topics,
     folder_ids: facets.folder_ids,
     has_folder: facets.hasFolder,

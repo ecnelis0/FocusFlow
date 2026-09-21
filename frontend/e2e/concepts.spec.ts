@@ -1,14 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-async function logQuestion(page: Page, question: string) {
-  await page.goto("/log");
-  await page.getByLabel("The question").fill(question);
-  await page.getByLabel("You put").fill("12π");
-  await page.getByLabel("The answer was").fill("36π");
-  await page.getByRole("button", { name: "Just log it" }).click();
-  await expect(page).toHaveURL(/\/bank\/[0-9a-f]{32}/);
-  return page.url();
-}
+import { logQuestion } from "./helpers";
 
 test("a concept is written once, then questions are tagged onto it afterwards", async ({
   page,

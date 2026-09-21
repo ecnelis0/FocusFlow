@@ -2,8 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Categories } from "@/components/app/categories";
-import { ReviewSession } from "@/components/app/review-session";
+import ConceptsPage from "@/app/concepts/page";
 import { Unreachable } from "@/components/app/unreachable";
 import { api } from "@/lib/api";
 import { renderWithQuery } from "@/test/render";
@@ -40,37 +39,27 @@ describe("Unreachable", () => {
 describe("a failed load is never shown as an empty bank", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("the review session does not claim nothing is due", async () => {
-    vi.spyOn(api, "dueReviews").mockRejectedValue(down());
+  it("the concepts list does not claim you have written none", async () => {
+    // The rule this file exists for. Retargeted from the review session and the
+    // category rail, both of which are gone; every surviving list surface still
+    // has to branch on `isError` before it reaches its empty state.
+    vi.spyOn(api, "listConcepts").mockRejectedValue(down());
 
-    renderWithQuery(<ReviewSession />);
-
-    await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent(/Can’t reach/),
-    );
-    // The one message that would make a student close the app believing they were
-    // up to date.
-    expect(screen.queryByText("Nothing is due.")).not.toBeInTheDocument();
-  });
-
-  it("the category rail does not render a bank with no categories", async () => {
-    vi.spyOn(api, "stats").mockRejectedValue(down());
-    vi.spyOn(api, "listConcepts").mockResolvedValue([]);
-
-    renderWithQuery(<Categories />);
+    renderWithQuery(<ConceptsPage />);
 
     await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent(/Can’t reach/),
+      expect(screen.getByRole("alert")).toHaveTextContent(/Can\u2019t reach/),
     );
-    expect(screen.queryByText("How urgent")).not.toBeInTheDocument();
+    // The one message that would make a student believe their work was gone.
+    expect(screen.queryByText("No concepts yet.")).not.toBeInTheDocument();
   });
 
   it("still shows the real empty state when the API answers with nothing", async () => {
-    vi.spyOn(api, "dueReviews").mockResolvedValue([]);
+    vi.spyOn(api, "listConcepts").mockResolvedValue([]);
 
-    renderWithQuery(<ReviewSession />);
+    renderWithQuery(<ConceptsPage />);
 
-    expect(await screen.findByText("Nothing is due.")).toBeInTheDocument();
+    expect(await screen.findByText("No concepts yet.")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

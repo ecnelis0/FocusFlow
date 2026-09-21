@@ -1,18 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-async function logOne(page: import("@playwright/test").Page, question: string) {
-  await page.goto("/log");
-  await page.getByLabel("Subject").fill("Biology");
-  await page.getByLabel("The question").fill(question);
-  await page.getByLabel("You put").fill("Lines 4-6");
-  await page.getByLabel("The answer was").fill("Lines 20-22");
-  await page.getByRole("button", { name: "Log it and ask the AI" }).click();
-  await expect(page).toHaveURL(/\/bank\/[0-9a-f]{32}/);
-}
+import { logQuestion } from "./helpers";
 
 test("the side panel answers a question in the student's own words", async ({ page }) => {
   const question = `Side panel biology question ${Date.now() % 10000} [e2e]`;
-  await logOne(page, question);
+  await logQuestion(page, question);
 
   await page.getByRole("button", { name: "Ask the bank" }).click();
   const panel = page.getByRole("complementary", { name: "Ask the bank" });
@@ -43,7 +35,7 @@ test("every row the panel returns actually satisfies the filter", async ({ page 
   // Asserted as an invariant rather than an exact list: the specs share one e2e
   // database, so any "nothing matches" expectation is at the mercy of test order.
   // The empty state itself is covered deterministically in facets.spec.ts.
-  await logOne(page, `Panel invariant ${Date.now() % 10000} [e2e]`);
+  await logQuestion(page, `Panel invariant ${Date.now() % 10000} [e2e]`);
 
   await page.getByRole("button", { name: "Ask the bank" }).click();
   const panel = page.getByRole("complementary", { name: "Ask the bank" });
@@ -59,24 +51,6 @@ test("every row the panel returns actually satisfies the filter", async ({ page 
     await expect(hit.getByText("Fundamental concept")).toBeVisible();
     await expect(hit.getByText(/Biology/)).toBeVisible();
   }
-});
-
-test("the categories tab lists the bank and filters it", async ({ page }) => {
-  const question = `Category browse ${Date.now() % 10000} [e2e]`;
-  await logOne(page, question);
-
-  await page.getByRole("button", { name: "Ask the bank" }).click();
-  const panel = page.getByRole("complementary", { name: "Ask the bank" });
-  await panel.getByRole("tab", { name: "Categories" }).click();
-
-  await expect(panel.getByText("How urgent")).toBeVisible();
-  await expect(panel.getByText("Subjects")).toBeVisible();
-  await expect(panel.getByText("Why you missed it")).toBeVisible();
-
-  await panel.getByRole("checkbox", { name: /^Biology/ }).click();
-  await panel.getByRole("button", { name: /^Show 1 filter$/ }).click();
-  await expect(page).toHaveURL(/\/bank\?subject=Biology/);
-  await expect(page.getByText(question)).toBeVisible({ timeout: 10_000 });
 });
 
 test("the panel closes again", async ({ page }) => {

@@ -1,110 +1,64 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
+import { addFolder, addMaterial, logQuestion, stamped } from "./helpers";
 
-/** Logs a question and hand-sets the facets, so the test does not depend on what
- *  the analyzer happened to choose. */
-async function logWith(
-  page: Page,
-  question: string,
-  subject: string,
-  facets: { urgency: string; topic: string; errorType: string },
-) {
-  await page.goto("/log");
-  await page.getByLabel("Subject").fill(subject);
-  await page.getByLabel("The question").fill(question);
-  await page.getByLabel("You put").fill("1");
-  await page.getByLabel("The answer was").fill("2");
-  await page.getByRole("button", { name: "Just log it" }).click();
-  await expect(page).toHaveURL(/\/bank\/[0-9a-f]{32}/);
-
-  await page.getByRole("button", { name: "Write it myself" }).click();
-  await page.getByLabel("How urgent").selectOption(facets.urgency);
-  await page.getByLabel("Why you got it wrong").selectOption(facets.errorType);
-  await page.getByLabel("Topic").fill(facets.topic);
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText(facets.topic).first()).toBeVisible();
-}
-
-test("topics live under their subject, and four facets narrow each other", async ({
-  page,
-}) => {
-  const stamp = Date.now() % 10000;
-  const wanted = `Facet target ${stamp} [e2e]`;
-  const wrongTopic = `Facet wrong topic ${stamp} [e2e]`;
-  const wrongSubject = `Facet wrong subject ${stamp} [e2e]`;
-
-  await logWith(page, wanted, "Algebra", {
-    urgency: "very_important",
-    topic: `math fundamentals ${stamp}`,
-    errorType: "concept_gap",
-  });
-  await logWith(page, wrongTopic, "Algebra", {
-    urgency: "very_important",
-    topic: `circles ${stamp}`,
-    errorType: "concept_gap",
-  });
-  await logWith(page, wrongSubject, "Biology", {
-    urgency: "very_important",
-    topic: `math fundamentals ${stamp}`,
-    errorType: "concept_gap",
-  });
-
-  await page.getByRole("button", { name: "Ask the bank" }).click();
-  const panel = page.getByRole("complementary", { name: "Ask the bank" });
-  await panel.getByRole("tab", { name: "Categories" }).click();
-
-  // A topic is not visible until its own subject is opened.
-  await expect(panel.getByText(`math fundamentals ${stamp}`)).toBeHidden();
-  await panel.getByRole("button", { name: "Expand Algebra" }).click();
-  await expect(panel.getByText(`math fundamentals ${stamp}`)).toBeVisible();
-  await expect(panel.getByText(`circles ${stamp}`)).toBeVisible();
-
-  // Four facets at once: subject, topic, slot, urgency.
-  await panel.getByRole("checkbox", { name: /^Algebra/ }).click();
-  await panel.getByRole("checkbox", { name: new RegExp(`math fundamentals ${stamp}`) }).click();
-  await panel.getByRole("checkbox", { name: /Concept gap/ }).click();
-  await panel.getByRole("checkbox", { name: /Very important/ }).click();
-  await panel.getByRole("button", { name: "Show 4 filters" }).click();
-
-  await expect(page).toHaveURL(/\/bank\?/);
-  const article = page.locator("main");
-  await expect(article.getByText(wanted)).toBeVisible({ timeout: 10_000 });
-  // The two that differ in exactly one facet are excluded.
-  await expect(article.getByText(wrongTopic)).toBeHidden();
-  await expect(article.getByText(wrongSubject)).toBeHidden();
-});
+/** The bank's filters, on the facets that still exist.
+ *
+ *  This file used to drive urgency and error-type checkboxes in a category rail.
+ *  All three are gone with the review half of the app, so what is left to narrow
+ *  by is the subject, the folder, the concept and the text — which is also all
+ *  the student can actually set. */
 
 test("a filtered bank is a link, and each filter can be peeled off", async ({ page }) => {
-  const stamp = Date.now() % 10000;
-  const question = `Peelable ${stamp} [e2e]`;
-  await logWith(page, question, "Algebra", {
-    urgency: "fundamental",
-    topic: `peel ${stamp}`,
-    errorType: "formula_error",
-  });
+  const subject = stamped("Algebra");
+  const folder = stamped("Linear equations");
+  const question = `Peelable ${Date.now() % 1000000}?`;
+
+  await addFolder(page, subject, folder);
+  await logQuestion(page, question, { folder });
 
   // Straight to a multi-facet URL: the filters are in the address, not in memory.
-  await page.goto(`/bank?subject=Algebra&urgency=fundamental&topic=${encodeURIComponent(`peel ${stamp}`)}`);
-  await expect(page.getByText(question)).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("Fundamental concept").first()).toBeVisible();
+  await page.goto(`/bank?subject=${encodeURIComponent(subject)}&q=${encodeURIComponent(question)}`);
+  await expect(page.getByRole("main").getByText(question)).toBeVisible({ timeout: 15_000 });
 
   // Removing a filter widens the result rather than resetting everything. Named,
-  // not "the first one": the pills are rendered in a fixed order that is not this
-  // test's business, and when that order changed this quietly began peeling the
-  // urgency off and asserting the urgency was still there.
-  await page.getByRole("button", { name: `Remove filter peel ${stamp}` }).click();
-  await expect(page).toHaveURL(/urgency=fundamental/);
-  await expect(page).not.toHaveURL(/topic=/);
-  await expect(page.getByText(question)).toBeVisible();
+  // not "the first one": the pills render in a fixed order that is not this
+  // test's business, and when that order last changed this quietly began peeling
+  // off a different filter than it meant to.
+  await page.getByRole("button", { name: `Remove filter ${subject}` }).click();
+  await expect(page).not.toHaveURL(/subject=/);
+  await expect(page.getByRole("main").getByText(question)).toBeVisible();
 
   await page.getByRole("button", { name: "Clear all" }).click();
   await expect(page).toHaveURL(/\/bank$/);
 });
 
 test("a combination that matches nothing explains why", async ({ page }) => {
-  await page.goto("/bank?subject=Algebra&subject=Biology&urgency=fundamental&topic=nothing-has-this-topic");
+  await page.goto("/bank?subject=Algebra&subject=Biology&topic=nothing-has-this-topic");
 
   await expect(page.getByText("Nothing matches all of those.")).toBeVisible({
-    timeout: 10_000,
+    timeout: 15_000,
   });
+});
+
+test("a folder narrows the bank to what was put into it", async ({ page }) => {
+  const subject = stamped("Chemistry");
+  const wanted = stamped("Unit 2: Bonding");
+  const other = stamped("Unit 3: Rates");
+  const inWanted = `Ionic bonding note ${Date.now() % 1000000}`;
+  const inOther = `Reaction rate note ${Date.now() % 1000000}`;
+
+  await addFolder(page, subject, wanted);
+  await addFolder(page, subject, other);
+  await addMaterial(page, { text: `${inWanted}: metals give electrons away.`, folder: wanted });
+  await addMaterial(page, { text: `${inOther}: temperature speeds things up.`, folder: other });
+
+  await page.goto("/bank");
+  await page.getByRole("tab", { name: new RegExp(`^${subject} `) }).click();
+  await page.getByRole("button", { name: `Open ${wanted}` }).click();
+
+  await expect(page).toHaveURL(/folder=/);
+  const main = page.getByRole("main");
+  await expect(main.getByText(inWanted)).toBeVisible({ timeout: 15_000 });
+  await expect(main.getByText(inOther)).toBeHidden();
 });

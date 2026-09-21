@@ -1,13 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function logQuestion(page: Page, question: string) {
-  await page.goto("/log");
-  await page.getByLabel("The question").fill(question);
-  await page.getByLabel("You put").fill("1");
-  await page.getByLabel("The answer was").fill("2");
-  await page.getByRole("button", { name: "Just log it" }).click();
-  await expect(page).toHaveURL(/\/bank\/[0-9a-f]{32}/);
-}
+import { logQuestion } from "./helpers";
 
 async function writeConcept(page: Page, title: string) {
   await page.goto("/concepts");
@@ -59,13 +52,9 @@ test("questions with no concept are findable and taggable", async ({ page }) => 
   await logQuestion(page, question);
   await writeConcept(page, title);
 
-  // The dashboard says how many are unfiled.
-  await page.goto("/dashboard");
-  const nudge = page.getByRole("link", { name: /not filed under any concept/ });
-  await expect(nudge).toBeVisible({ timeout: 10_000 });
-  await nudge.click();
-
-  await expect(page).toHaveURL(/tagged=0/);
+  // The "no concept yet" filter is a link, not a dashboard nudge: the dashboard
+  // that counted them is gone, but the filter it linked to still works.
+  await page.goto("/bank?tagged=0");
   await expect(page.getByText("No concept yet")).toBeVisible();
   await expect(page.getByRole("main").getByText(question)).toBeVisible({ timeout: 10_000 });
 

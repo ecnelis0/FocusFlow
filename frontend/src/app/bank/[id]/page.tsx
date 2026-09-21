@@ -6,16 +6,13 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { AnalysisPanel } from "@/components/app/analysis";
 import { ConceptTags } from "@/components/app/concept-tags";
+import { Empty } from "@/components/app/empty";
 import { MistakeImages } from "@/components/app/images";
 import { MistakeFolder } from "@/components/app/mistake-folder";
 import { MistakeLabels } from "@/components/app/mistake-labels";
-import { Empty } from "@/components/app/empty";
-import { Ladder } from "@/components/app/ladder";
+import { Panel } from "@/components/app/panel";
 import { QuestionCard } from "@/components/app/question-card";
-import { Panel, SPINE } from "@/components/app/panel";
-import { Section } from "@/components/app/section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,17 +26,14 @@ export default function MistakePage() {
   const { data: mistake, isPending, isError } = useQuery({
     queryKey: keys.mistake(id),
     queryFn: () => api.getMistake(id),
-    // The analysis arrives moments after logging; stop polling once it lands.
-    refetchInterval: (query) =>
-      query.state.data?.analysis_status === "pending" ? 1500 : false,
   });
 
   const remove = useMutation({
     mutationFn: () => api.deleteMistake(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mistakes"] });
-      queryClient.invalidateQueries({ queryKey: keys.stats() });
-      queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      queryClient.invalidateQueries({ queryKey: ["materials"] });
+      queryClient.invalidateQueries({ queryKey: keys.subjects() });
       toast.success("Removed from the bank.");
       router.push("/bank");
     },
@@ -63,9 +57,6 @@ export default function MistakePage() {
         <Link href="/bank" className="text-sm text-muted-foreground hover:text-foreground">
           ← The bank
         </Link>
-        {/* No urgency badge here: the debrief already carries one, and the same
-            badge twice on one screen is a duplicate to read and to announce. The
-            coloured spine on the question panel says it at a glance. */}
         {mistake.subject && (
           <Badge variant="outline" className="ml-auto">
             {mistake.subject}
@@ -73,18 +64,9 @@ export default function MistakePage() {
         )}
       </div>
 
-      <Panel
-        spine={mistake.urgency ? SPINE[mistake.urgency] : undefined}
-        className="px-6 py-5"
-      >
+      <Panel className="px-6 py-5">
         <QuestionCard mistake={mistake} />
       </Panel>
-
-      <Section title="The debrief">
-        <Panel className="px-6 py-5">
-          <AnalysisPanel mistake={mistake} editable />
-        </Panel>
-      </Section>
 
       <Panel className="px-6 py-5">
         <MistakeImages mistake={mistake} editable />
@@ -102,14 +84,10 @@ export default function MistakePage() {
         <ConceptTags mistake={mistake} />
       </Panel>
 
-      <Section
-        title="Review schedule"
-        description={`Logged ${format(new Date(mistake.created_at), "d MMM yyyy, HH:mm")}.`}
-      >
-        <Panel className="px-6 py-5">
-          <Ladder reviews={mistake.reviews} />
-        </Panel>
-      </Section>
+      <p className="text-xs text-muted-foreground">
+        {mistake.source ? `From ${mistake.source}. ` : ""}
+        Added {format(new Date(mistake.created_at), "d MMM yyyy, HH:mm")}.
+      </p>
 
       <Button
         variant="ghost"

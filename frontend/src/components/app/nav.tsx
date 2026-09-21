@@ -1,48 +1,24 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { SidePanelToggle } from "@/components/app/side-panel";
-import { api, keys } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-/** Study is first because it is the front door: material goes in there, and the
- *  concepts and questions everything else lists are what comes out of it. The
- *  mistake bank's own report sits at the bottom, where a summary belongs. */
+/** Study is first because it is the front door: material goes in there, and
+ *  everything the other three screens show is what came out of it. */
 const LINKS = [
   { href: "/", label: "Study" },
   { href: "/bank", label: "The bank" },
   { href: "/concepts", label: "Concepts" },
   { href: "/map", label: "The map" },
-  { href: "/review", label: "Review" },
-  { href: "/log", label: "Log a miss" },
-  { href: "/dashboard", label: "Dashboard" },
 ];
-
-function DueBadge({ due }: { due: number }) {
-  if (due <= 0) return null;
-  return (
-    <span
-      className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-medium text-primary-foreground"
-      aria-label={`${due} due now`}
-    >
-      {due}
-    </span>
-  );
-}
 
 /** The app's navigation: a fixed sidebar on the left on wide screens, and a
  *  scrollable top bar on narrow ones. One list of links feeds both. */
 export function Nav() {
   const pathname = usePathname();
-  const { data: stats } = useQuery({
-    queryKey: keys.stats(),
-    queryFn: api.stats,
-    refetchInterval: 60_000,
-  });
-  const due = stats?.due_now ?? 0;
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
@@ -63,7 +39,6 @@ export function Nav() {
           )}
         >
           {link.label}
-          {link.href === "/review" && <DueBadge due={due} />}
         </Link>
       );
     });

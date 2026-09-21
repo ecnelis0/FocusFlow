@@ -16,9 +16,7 @@ const PICKED: Facets = {
   concept_ids: [],
   tags: [],
   hasConcept: null,
-  urgency: ["very_important"],
   subjects: ["Calculus"],
-  error_type: ["concept_gap"],
   topics: ["limits"],
   folder_ids: [],
   hasFolder: null,
@@ -27,17 +25,17 @@ const PICKED: Facets = {
 
 describe("facets", () => {
   it("toggling adds then removes, leaving the other facets alone", () => {
-    const added = toggle(NO_FACETS, "urgency", "fundamental");
-    expect(added.urgency).toEqual(["fundamental"]);
+    const added = toggle(NO_FACETS, "topics", "circles");
+    expect(added.topics).toEqual(["circles"]);
     expect(added.subjects).toEqual([]);
 
-    expect(toggle(added, "urgency", "fundamental").urgency).toEqual([]);
+    expect(toggle(added, "topics", "circles").topics).toEqual([]);
   });
 
   it("holds several values in one facet", () => {
-    const two = toggle(toggle(NO_FACETS, "urgency", "fundamental"), "urgency", "important");
+    const two = toggle(toggle(NO_FACETS, "topics", "circles"), "topics", "important");
 
-    expect(two.urgency).toEqual(["fundamental", "important"]);
+    expect(two.topics).toEqual(["circles", "important"]);
   });
 
   it("survives the round trip through the URL", () => {
@@ -53,10 +51,10 @@ describe("facets", () => {
     expect(fromSearchParams(params).topics).toEqual(["rates, ratios", "circles"]);
   });
 
-  it("reads a single-value link from the dashboard", () => {
-    const facets = fromSearchParams(new URLSearchParams("urgency=fundamental"));
+  it("reads a single-value link", () => {
+    const facets = fromSearchParams(new URLSearchParams("topic=circles"));
 
-    expect(facets.urgency).toEqual(["fundamental"]);
+    expect(facets.topics).toEqual(["circles"]);
     expect(countSelected(facets)).toBe(1);
   });
 
@@ -64,16 +62,14 @@ describe("facets", () => {
     expect(isEmpty(NO_FACETS)).toBe(true);
     expect(isEmpty({ ...NO_FACETS, text: "  " })).toBe(true);
     expect(isEmpty(PICKED)).toBe(false);
-    expect(countSelected(PICKED)).toBe(4);
+    expect(countSelected(PICKED)).toBe(2);
   });
 
   it("becomes the query the backend runs", () => {
     const query = toQuery({ ...PICKED, text: "  circle  " });
 
     expect(query).toMatchObject({
-      urgency: ["very_important"],
       subjects: ["Calculus"],
-      error_type: ["concept_gap"],
       topics: ["limits"],
       text: "circle",
     });

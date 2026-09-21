@@ -17,7 +17,6 @@ function QuestionEditor({ mistake, onDone }: { mistake: Mistake; onDone: () => v
     source: mistake.source ?? "",
     question_text: mistake.question_text,
     choices: (mistake.choices ?? []).join("\n"),
-    your_answer: mistake.your_answer,
     correct_answer: mistake.correct_answer,
     student_note: mistake.student_note ?? "",
   });
@@ -42,7 +41,6 @@ function QuestionEditor({ mistake, onDone }: { mistake: Mistake; onDone: () => v
           source: draft.source.trim() || null,
           question_text: draft.question_text.trim(),
           choices: choices.length > 0 ? choices : null,
-          your_answer: draft.your_answer.trim(),
           correct_answer: draft.correct_answer.trim(),
           student_note: draft.student_note.trim() || null,
         });
@@ -102,16 +100,7 @@ function QuestionEditor({ mistake, onDone }: { mistake: Mistake; onDone: () => v
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label htmlFor="edit-your-answer">You put</Label>
-          <Input
-            id="edit-your-answer"
-            className="mt-1.5"
-            value={draft.your_answer}
-            onChange={(event) => field("your_answer", event.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="edit-correct-answer">The answer was</Label>
+          <Label htmlFor="edit-correct-answer">The answer</Label>
           <Input
             id="edit-correct-answer"
             className="mt-1.5"
@@ -175,10 +164,6 @@ export function QuestionCard({ mistake }: { mistake: Mistake }) {
       <Separator />
 
       <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-        <span>
-          <span className="text-muted-foreground">You put </span>
-          <span className="font-medium text-destructive">{mistake.your_answer}</span>
-        </span>
         <span>
           <span className="text-muted-foreground">Answer </span>
           <span className="font-medium">{mistake.correct_answer}</span>

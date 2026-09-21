@@ -1,26 +1,13 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-async function logQuestion(page: Page, fields: Record<string, string>) {
-  await page.goto("/log");
-  await page.getByLabel("Where it came from").fill(fields.source);
-  await page.getByLabel("The question").fill(fields.question);
-  await page.getByLabel("You put").fill(fields.yours);
-  await page.getByLabel("The answer was").fill(fields.correct);
-  await page.getByRole("button", { name: "Just log it" }).click();
-  await expect(page).toHaveURL(/\/bank\/[0-9a-f]{32}/);
-}
+import { logQuestion } from "./helpers";
 
 test("clicking a concept shows the concept itself, then its questions", async ({ page }) => {
   const stamp = Date.now() % 100000;
   const title = `Circumference gives the radius ${stamp}`;
   const question = `Circle area question ${stamp} [e2e]`;
 
-  await logQuestion(page, {
-    source: `Practice paper ${stamp}`,
-    question,
-    yours: "12π",
-    correct: "36π",
-  });
+  await logQuestion(page, question, { answer: "36π" });
 
   await page.goto("/concepts");
   await page.getByRole("button", { name: /Write (a|your first) concept/ }).first().click();
@@ -83,12 +70,7 @@ test("tagging finds a question by its source, its answer, or words in any order"
   const title = `Search test concept ${stamp}`;
   const question = `A circle has a circumference of 12π. What is its area? ${stamp}`;
 
-  await logQuestion(page, {
-    source: `Practice Test 4 ${stamp}`,
-    question,
-    yours: "12π",
-    correct: `36π ${stamp}`,
-  });
+  await logQuestion(page, question, { answer: `36π ${stamp}` });
 
   await page.goto("/concepts");
   await page.getByRole("button", { name: /Write (a|your first) concept/ }).first().click();

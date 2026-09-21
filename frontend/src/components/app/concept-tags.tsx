@@ -25,7 +25,7 @@ export function ConceptTags({ mistake }: { mistake: Mistake }) {
     queryClient.invalidateQueries({ queryKey: keys.mistake(mistake.id) });
     queryClient.invalidateQueries({ queryKey: ["mistakes"] });
     queryClient.invalidateQueries({ queryKey: keys.concepts() });
-    queryClient.invalidateQueries({ queryKey: keys.stats() });
+    queryClient.invalidateQueries({ queryKey: keys.subjects() });
   };
 
   const tag = useMutation({

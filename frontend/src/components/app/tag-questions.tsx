@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { UrgencyBadge } from "@/components/app/urgency-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api, keys } from "@/lib/api";
@@ -32,7 +31,7 @@ export function TagQuestions({ concept }: { concept: ConceptDetail }) {
       queryClient.setQueryData(keys.concept(concept.id), updated);
       queryClient.invalidateQueries({ queryKey: keys.concepts() });
       queryClient.invalidateQueries({ queryKey: ["mistakes"] });
-      queryClient.invalidateQueries({ queryKey: keys.stats() });
+      queryClient.invalidateQueries({ queryKey: keys.subjects() });
       toast.success("Tagged.");
     },
     onError: (error: Error) => toast.error(error.message),
@@ -114,7 +113,6 @@ export function TagQuestions({ concept }: { concept: ConceptDetail }) {
                     className="w-full rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted disabled:opacity-50"
                   >
                     <span className="mb-0.5 flex flex-wrap items-center gap-1.5">
-                      {mistake.urgency && <UrgencyBadge urgency={mistake.urgency} />}
                       {(mistake.subject || mistake.topic) && (
                         <span className="text-[11px] text-muted-foreground">
                           {[mistake.subject, mistake.topic].filter(Boolean).join(" · ")}
