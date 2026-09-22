@@ -469,3 +469,33 @@ async def test_a_filed_questions_timestamp_survives_the_round_trip_as_utc(
     body = (await client.get(f"/mistakes/{question_id}")).json()
     assert body["created_at"].endswith("Z") or body["created_at"].endswith("+00:00")
     assert datetime.fromisoformat(body["created_at"]).tzinfo is not None
+
+
+async def test_a_filed_question_says_which_material_it_came_out_of(client):
+    """Without this on the wire a folder lists every question twice.
+
+    The folder page draws the materials it holds, then any question moved into
+    it on its own. Telling those apart needs `material_id` on the question —
+    left off the schema, every question looked like a stray and appeared both
+    inside its material and again underneath it.
+    """
+    notes = NOTES + "\nWhat is u? Answer: the simpler one."
+    proposal = (await client.post("/capture", data={"text": notes})).json()
+    result = await approve(client, proposal, questions=[
+        {
+            "question_text": q["question_text"],
+            "correct_answer": q["correct_answer"],
+            "concept_titles": [q["concept_title"]],
+            "origin": q["origin"],
+        }
+        for q in proposal["questions"]
+    ])
+
+    assert result["material_id"], "the commit filed no material"
+    assert result["questions"], "the commit filed no question"
+    for question in result["questions"]:
+        assert question["material_id"] == result["material_id"]
+
+    # And it survives being read back, not just returned from the commit.
+    fetched = (await client.get(f"/mistakes/{result['questions'][0]['id']}")).json()
+    assert fetched["material_id"] == result["material_id"]

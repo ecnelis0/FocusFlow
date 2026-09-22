@@ -253,6 +253,11 @@ class MistakeRead(BaseModel):
     student_note: str | None
     topic: str | None
     tags: list[str] | None
+    # The upload this came out of, null for a question that predates materials.
+    # Without it on the wire, a folder cannot tell a question that belongs to a
+    # material it is already listing from one moved in on its own, and lists
+    # every question twice over.
+    material_id: str | None = None
 
     concepts: list[ConceptSummary] = []
     images: list[ImageRead] = []
