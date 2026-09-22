@@ -205,10 +205,63 @@ export interface Material {
   folder_id: string | null;
   concept_count: number;
   question_count: number;
+  /** True once a revision page has been written from it. */
+  has_notes: boolean;
 }
 
 /** A material opened: everything that came out of that one upload. */
 export interface MaterialDetail extends Material {
   concepts: Concept[];
   questions: Mistake[];
+}
+
+/** A figure the app draws itself, described as data.
+ *
+ *  A closed vocabulary, mirroring `backend/app/analysis/notes.py`. Asking a
+ *  model for "a diagram" gets prose describing one or SVG that renders like a
+ *  ransom note; asking for four named shapes gets something drawable. A new
+ *  member here needs a new branch in `note-figure.tsx`. */
+export type FigureKind = "timeline" | "process" | "parts" | "compare";
+
+export interface NoteStep {
+  label: string;
+  text: string;
+}
+
+export interface NotePart {
+  name: string;
+  text: string;
+}
+
+export interface NoteRow {
+  label: string;
+  cells: string[];
+}
+
+export interface NoteFigure {
+  kind: FigureKind;
+  title: string;
+  /** "timeline" and "process". */
+  steps: NoteStep[];
+  /** "parts": the thing being pulled apart. */
+  centre: string | null;
+  parts: NotePart[];
+  /** "compare". */
+  columns: string[];
+  rows: NoteRow[];
+}
+
+export interface NoteSection {
+  heading: string;
+  points: string[];
+  figure: NoteFigure | null;
+}
+
+/** A written-up revision page for one material. */
+export interface NoteDocument {
+  title: string;
+  in_a_sentence: string;
+  sections: NoteSection[];
+  /** The mix-ups the material sets — where the marks actually go. */
+  traps: string[];
 }

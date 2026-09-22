@@ -68,6 +68,7 @@ export function makeMaterial(overrides: Partial<Material> = {}): Material {
     folder_id: "f1",
     concept_count: 4,
     question_count: 8,
+    has_notes: false,
     ...overrides,
   };
 }

@@ -150,6 +150,9 @@ class CaptureCommit(BaseModel):
     # What to call this material in the folder that now holds it. The page sends
     # back the video's title or the file's name; blank falls back to the kind.
     title: str | None = Field(default=None, max_length=200)
+    # The course, when no folder is chosen. Ignored when one is: the folder's own
+    # subject is authoritative and `filing.py` writes it.
+    subject: str | None = Field(default=None, max_length=80)
     kind: str = Field(default="text", max_length=16)
     # The extractor's summary of the whole thing, shown under the title.
     summary: str | None = None
@@ -607,6 +610,11 @@ async def commit(body: CaptureCommit, session: SessionDep, user_id: UserDep) -> 
         created_at=utcnow(),
         title=_material_title(body),
         kind=" ".join(body.kind.split())[:16] or "text",
+        # The subject only when there is no folder; `file_into` below sets it from
+        # the folder otherwise, and the folder's own subject always wins. Without
+        # this a capture filed with no folder had no subject at all, so the
+        # material never appeared under the course the student had just typed.
+        subject=_material_subject(body),
         source=body.source,
         summary=(body.summary or "").strip() or None,
     )
@@ -627,6 +635,22 @@ async def commit(body: CaptureCommit, session: SessionDep, user_id: UserDep) -> 
         session, user_id, body.questions, body.source, folder=folder, material=material
     )
     return CaptureResult(changes=changes, questions=questions, material_id=material.id)
+
+
+def _material_subject(body: CaptureCommit) -> str | None:
+    """The course this material belongs to, when no folder decides it.
+
+    The typed steer first, because the student typed it; failing that, whatever
+    the reading gave the concepts, which is the same answer they will see on the
+    concepts themselves.
+    """
+    typed = " ".join((body.subject or "").split())[:80]
+    if typed:
+        return typed
+    return next(
+        (" ".join(c.subject.split())[:80] for c in body.concepts if (c.subject or "").strip()),
+        None,
+    )
 
 
 def _material_title(body: CaptureCommit) -> str:

@@ -140,6 +140,15 @@ export async function approveCapture(input: {
   image_filename: string | null;
   /** Everything filed by this capture lands here and takes its subject. */
   folder_id?: string | null;
+  /** The course, when no folder was chosen. Ignored when one was: the folder's
+   *  own subject is authoritative. Without this a capture filed with no folder
+   *  left its material under no subject, so it never appeared under the course
+   *  the student had just typed. */
+  subject?: string | null;
+  /** What to call it in the listing, and what it was. */
+  title?: string | null;
+  kind?: string;
+  summary?: string | null;
   source: string | null;
 }): Promise<CaptureResult> {
   const response = await fetch(`${API_URL}/capture/commit`, {

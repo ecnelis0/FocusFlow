@@ -317,6 +317,10 @@ export function CaptureForm() {
           })),
         image_filename: proposal?.image_filename ?? null,
         folder_id: folderId,
+        subject: subject.trim() || null,
+        title: proposal?.title ?? null,
+        kind: proposal?.kind ?? "text",
+        summary: proposal?.summary ?? null,
         source: proposal?.title
           ? `Video: ${proposal.title}`.slice(0, 200)
           : proposal

@@ -254,6 +254,14 @@ class Material(Base):
     # The extractor's own summary of the whole thing, shown under the title.
     summary: Mapped[str | None] = mapped_column(Text)
 
+    # A written-up page of notes, as `NoteDocument` JSON. Null until asked for:
+    # writing them is a second AI call, and most material never gets read twice.
+    # Stored rather than regenerated because the same material must not produce
+    # different notes each time it is opened - a revision page that rewrites
+    # itself is one you cannot come back to.
+    notes: Mapped[dict | None] = mapped_column(JSON)
+    notes_written_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
+
     concepts: Mapped[list[Concept]] = relationship(
         secondary=material_concepts,
         back_populates="materials",

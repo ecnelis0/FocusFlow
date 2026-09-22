@@ -14,6 +14,7 @@ import httpx2
 
 from ..query import BankQuery, Vocabulary
 from .base import AnalysisFailed
+from .notes import NOTES_PROMPT, NoteDocument, NoteInput
 
 if TYPE_CHECKING:
     from .scan import ScanInput, ScannedQuestion
@@ -214,4 +215,43 @@ class ClaudeScanner:
         parsed = response.parsed_output
         if parsed is None:
             raise AnalysisFailed("model returned no structured output")
+        return parsed
+
+
+class ClaudeNoteWriter:
+    """Notes through the Anthropic API, with the same structured-output plumbing."""
+
+    name = "claude"
+
+    def __init__(
+        self,
+        api_key: str | None,
+        model: str,
+        http_client: httpx2.AsyncClient | None = None,
+        base_url: str | None = None,
+    ) -> None:
+        # Same two escape hatches as the analyzer, for the same reason: the test
+        # that proves the real SDK works drives it against a stand-in endpoint.
+        self._client = anthropic.AsyncAnthropic(
+            api_key=api_key,
+            **({"http_client": http_client} if http_client else {}),
+            **({"base_url": base_url} if base_url else {}),
+        )
+        self._model = model
+
+    async def write(self, material: NoteInput) -> NoteDocument:
+        try:
+            response = await self._client.messages.parse(
+                model=self._model,
+                max_tokens=8192,
+                system=NOTES_PROMPT,
+                thinking={"type": "adaptive"},
+                messages=[{"role": "user", "content": material.render()}],
+                output_config={"format": NoteDocument},
+            )
+        except Exception as exc:  # noqa: BLE001 - the SDK raises a family of these
+            raise AnalysisFailed(f"the notes call failed ({exc})") from exc
+        parsed = response.parsed_output
+        if parsed is None:
+            raise AnalysisFailed("the model did not return notes that validated")
         return parsed

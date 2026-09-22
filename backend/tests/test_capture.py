@@ -499,3 +499,86 @@ async def test_a_filed_question_says_which_material_it_came_out_of(client):
     # And it survives being read back, not just returned from the commit.
     fetched = (await client.get(f"/mistakes/{result['questions'][0]['id']}")).json()
     assert fetched["material_id"] == result["material_id"]
+
+
+async def test_notes_are_written_once_and_kept(client):
+    """A revision page that rewrites itself is one you cannot come back to.
+
+    So the second call hands back the first call's page rather than paying for
+    another one and handing over something subtly different.
+    """
+    proposal = (await client.post("/capture", data={"text": NOTES})).json()
+    filed = await approve(client, proposal)
+    material_id = filed["material_id"]
+
+    first = await client.post(f"/materials/{material_id}/notes")
+    assert first.status_code == 200, first.text
+    assert first.json()["sections"], "the writer produced no sections"
+
+    again = await client.post(f"/materials/{material_id}/notes")
+    assert again.json() == first.json()
+
+    # And it is readable without writing it again.
+    read = await client.get(f"/materials/{material_id}/notes")
+    assert read.json() == first.json()
+
+    # The listing says it has them, so a page can offer to open rather than write.
+    [listed] = [m for m in (await client.get("/materials")).json() if m["id"] == material_id]
+    assert listed["has_notes"] is True
+
+
+async def test_notes_are_not_offered_for_a_material_that_filed_nothing(client):
+    """Writing a page out of nothing would invent it, which is the one thing
+    these notes must not do."""
+    proposal = (await client.post("/capture", data={"text": NOTES})).json()
+    filed = await approve(client, proposal, concepts=[], questions=[
+        {
+            "question_text": "Standing alone?",
+            "correct_answer": "Yes",
+            "concept_titles": [],
+            "origin": "material",
+        }
+    ])
+
+    response = await client.post(f"/materials/{filed['material_id']}/notes")
+    assert response.status_code == 422
+    assert "nothing filed" in response.json()["detail"]
+
+
+async def test_a_capture_with_no_folder_still_files_its_material_under_a_subject(client):
+    """Otherwise the material never appears under the course just typed.
+
+    The folder decides the subject when there is one. With no folder the typed
+    steer has to, or `GET /materials?subject=...` answers with nothing and the
+    bank shows an empty subject holding something.
+    """
+    proposal = (await client.post("/capture", data={"text": NOTES})).json()
+    filed = await approve(client, proposal, subject="Calculus")
+
+    [material] = [
+        m for m in (await client.get("/materials")).json() if m["id"] == filed["material_id"]
+    ]
+    assert material["subject"] == "Calculus"
+    assert [m["id"] for m in (await client.get("/materials?subject=Calculus")).json()] == [
+        filed["material_id"]
+    ]
+
+
+async def test_a_folder_still_beats_a_typed_subject_for_the_material(client):
+    """The folder is authoritative; a subject typed beside it does not overrule it."""
+    subject = (await client.post("/subjects", json={"name": "APUSH"})).json()
+    folder = (
+        await client.post(f"/subjects/{subject['id']}/folders", json={"name": "Unit 3"})
+    ).json()
+    folder_id = folder["folders"][0]["id"]
+
+    proposal = (await client.post("/capture", data={"text": NOTES})).json()
+    filed = await approve(
+        client, proposal, folder_id=folder_id, subject="Something else entirely"
+    )
+
+    [material] = [
+        m for m in (await client.get("/materials")).json() if m["id"] == filed["material_id"]
+    ]
+    assert material["subject"] == "APUSH"
+    assert material["folder_id"] == folder_id

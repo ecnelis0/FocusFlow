@@ -64,6 +64,9 @@ class FolderRead(BaseModel):
     # What is inside, so a folder card can say so without a request per folder.
     concept_count: int = 0
     question_count: int = 0
+    # True once a revision page has been written from it. The document itself
+    # comes from /materials/{id}/notes rather than riding on every listing.
+    has_notes: bool = False
 
 
 class SubjectCreate(BaseModel):
@@ -96,6 +99,9 @@ class SubjectRead(BaseModel):
     # Everything under the subject, folders and loose rows alike. The tab's count.
     concept_count: int = 0
     question_count: int = 0
+    # True once a revision page has been written from it. The document itself
+    # comes from /materials/{id}/notes rather than riding on every listing.
+    has_notes: bool = False
     # How much of it is in no folder yet - what the "Unfiled" card shows.
     unfiled_concept_count: int = 0
     unfiled_question_count: int = 0
@@ -286,6 +292,9 @@ class MaterialRead(BaseModel):
     folder_id: str | None
     concept_count: int = 0
     question_count: int = 0
+    # True once a revision page has been written from it. The document itself
+    # comes from /materials/{id}/notes rather than riding on every listing.
+    has_notes: bool = False
 
 
 class MaterialDetail(MaterialRead):

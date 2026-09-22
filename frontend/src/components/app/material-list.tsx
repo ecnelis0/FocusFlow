@@ -147,7 +147,17 @@ function MaterialCard({ material }: { material: Material }) {
   const kind = KIND_LABELS[material.kind] ?? material.kind;
 
   return (
-    <Panel>
+    <Panel className="group/material relative">
+      {/* A link, not a button: it navigates. Named for the material, because a
+          folder of six uploads would otherwise be six controls called "Notes". */}
+      <Link
+        href={`/materials/${material.id}/notes`}
+        aria-label={`${material.has_notes ? "Read the notes on" : "Write notes from"} ${material.title}`}
+        className="absolute top-3 right-3 z-10 rounded-md border px-2 py-0.5 text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover/material:opacity-100 focus-visible:opacity-100"
+      >
+        {material.has_notes ? "Notes" : "Write notes"}
+      </Link>
+
       <button
         type="button"
         // Named for the material, not "Expand": a folder of six uploads would
@@ -155,7 +165,7 @@ function MaterialCard({ material }: { material: Material }) {
         aria-label={`${open ? "Collapse" : "Expand"} ${material.title}`}
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
-        className="flex w-full items-start gap-3 px-4 py-3.5 text-left"
+        className="flex w-full items-start gap-3 px-4 py-3.5 pr-24 text-left"
       >
         <span
           aria-hidden

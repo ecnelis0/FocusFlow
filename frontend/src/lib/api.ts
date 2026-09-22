@@ -7,6 +7,7 @@ import type {
   Folder,
   Material,
   MaterialDetail,
+  NoteDocument,
   Mistake,
   MistakeEdit,
   ScannedQuestion,
@@ -222,6 +223,15 @@ export const api = {
   /** One material opened: the concepts and questions that came out of it. */
   getMaterial: (id: string) => request<MaterialDetail>(`/materials/${id}`),
 
+  /** The written-up revision page, or null when none has been asked for. */
+  getNotes: (id: string) => request<NoteDocument | null>(`/materials/${id}/notes`),
+
+  /** Write it. Kept once written: a second call returns the first call's page
+   *  unless `force`, because a revision page that rewrites itself is one you
+   *  cannot come back to. */
+  writeNotes: (id: string, force = false) =>
+    request<NoteDocument>(`/materials/${id}/notes?force=${force}`, { method: "POST" }),
+
   /** Ask a question about the bank. The model writes the filter; the rows are real. */
   ask: (question: string) =>
     request<Answer>("/ask", { method: "POST", body: JSON.stringify({ question }) }),
@@ -235,6 +245,7 @@ export const keys = {
   materials: (filters: { folder_id?: string; subject?: string } = {}) =>
     ["materials", filters] as const,
   material: (id: string) => ["material", id] as const,
+  notes: (id: string) => ["material", id, "notes"] as const,
   concepts: () => ["concepts"] as const,
   subjects: () => ["subjects"] as const,
   tags: () => ["tags"] as const,

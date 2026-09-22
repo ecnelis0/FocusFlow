@@ -11,8 +11,10 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from ..analysis.base import AnalysisFailed
+from ..analysis.notes import NoteDocument, NoteInput, get_note_writer
 from ..deps import SessionDep, UserDep
-from ..models import Concept, Material, mistake_options
+from ..models import Concept, Material, mistake_options, utcnow
 from ..schemas import MaterialDetail, MaterialRead
 from .concepts import _read as _read_concept
 
@@ -31,6 +33,7 @@ def _summarise(material: Material) -> MaterialRead:
         folder_id=material.folder_id,
         concept_count=len(material.concepts),
         question_count=len(material.questions),
+        has_notes=material.notes is not None,
     )
 
 
@@ -73,3 +76,81 @@ async def get_material(material_id: str, session: SessionDep, user_id: UserDep) 
         concepts=[_read_concept(concept) for concept in material.concepts],
         questions=material.questions,
     )
+
+
+async def _load(session, user_id: str, material_id: str) -> Material:
+    material = await session.scalar(
+        select(Material)
+        .where(Material.id == material_id, Material.user_id == user_id)
+        .options(selectinload(Material.concepts), selectinload(Material.questions))
+    )
+    if material is None:
+        raise HTTPException(status_code=404, detail="No such material")
+    return material
+
+
+@router.get("/{material_id}/notes", response_model=NoteDocument | None)
+async def read_notes(material_id: str, session: SessionDep, user_id: UserDep):
+    """The written-up page, or null if it has not been asked for yet.
+
+    Null rather than a 404: "no notes written yet" is an ordinary state of a
+    material, and the page that shows it needs to tell that apart from a
+    material that is not there.
+    """
+    material = await _load(session, user_id, material_id)
+    return material.notes
+
+
+@router.post("/{material_id}/notes", response_model=NoteDocument)
+async def write_notes(
+    material_id: str,
+    session: SessionDep,
+    user_id: UserDep,
+    force: bool = Query(
+        default=False,
+        description="Write them again even if there are notes already. Without it, "
+        "existing notes are returned untouched.",
+    ),
+):
+    """Write the revision page for this material, from what was filed off it.
+
+    Kept once written. Re-running by accident would hand back a different page
+    for the same material, and a revision page that rewrites itself is one you
+    cannot come back to - so the second call returns the first call's notes
+    unless `force` says otherwise.
+    """
+    material = await _load(session, user_id, material_id)
+    if material.notes is not None and not force:
+        return material.notes
+
+    if not material.concepts:
+        raise HTTPException(
+            status_code=422,
+            detail="There is nothing filed from this material to write notes from.",
+        )
+
+    writer = get_note_writer()
+    try:
+        document = await writer.write(
+            NoteInput(
+                title=material.title,
+                kind=material.kind,
+                summary=material.summary,
+                subject=material.subject,
+                concepts=[
+                    f"{concept.title} — {' '.join((concept.body or '').split())}"
+                    for concept in material.concepts
+                ],
+                questions=[
+                    f"Q: {question.question_text} A: {question.correct_answer}"
+                    for question in material.questions
+                ],
+            )
+        )
+    except AnalysisFailed as exc:
+        raise HTTPException(status_code=502, detail=f"Could not write the notes: {exc}") from exc
+
+    material.notes = document.model_dump()
+    material.notes_written_at = utcnow()
+    await session.commit()
+    return document

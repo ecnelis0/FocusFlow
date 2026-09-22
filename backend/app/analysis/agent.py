@@ -27,6 +27,7 @@ from ..query import BankQuery, Vocabulary
 from .base import AnalysisFailed
 from .claude import INTERPRET_PROMPT, SUMMARISE_PROMPT, summarise_prompt
 from .extract import _TEXT_LABELS, EXTRACT_PROMPT, CaptureExtraction, CaptureInput, _existing_block
+from .notes import NOTES_PROMPT, NoteDocument, NoteInput
 from .scan import SCAN_PROMPT, ScanInput, ScannedQuestion
 
 # Where a PDF or image lands before the agent reads it. Extension matters: the CLI
@@ -264,3 +265,20 @@ class AgentScanner:
         finally:
             path.unlink(missing_ok=True)
             Path(directory).rmdir()
+
+
+class AgentNoteWriter:
+    """Notes through the Claude Agent SDK. Same seam as `AgentExtractor`."""
+
+    name = "agent"
+
+    def __init__(self, model: str) -> None:
+        self._model = model
+
+    async def write(self, material: NoteInput) -> NoteDocument:
+        return await _run(
+            prompt=material.render(),
+            system=NOTES_PROMPT,
+            model=self._model,
+            schema=NoteDocument,
+        )
