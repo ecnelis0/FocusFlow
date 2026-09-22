@@ -164,6 +164,14 @@ therefore live only in the CSS, under `.dark`. Change both together.
 
 ## Conventions
 
+- **Autogenerate keeps proposing a `drop_constraint(None, type_='foreignkey')`
+  on `mistakes`, and it is always wrong.** `mistakes.material_id`'s foreign key
+  was created unnamed, so Alembic re-detects it as new on every run and writes a
+  downgrade line for it into whichever revision you happened to be generating.
+  SQLite cannot drop an anonymous constraint by name — `tests/test_migrations.py`
+  catches it as "Constraint must have a name" — and the revision did not add the
+  key anyway. Delete the line. Batch mode rebuilds the table from its remaining
+  columns regardless, so dropping the column takes the key with it.
 - **A model change needs a migration in the same commit.** The API migrates on startup
   and `tests/test_migrations.py` compares the migrated schema against the models, so
   forgetting one fails the suite rather than surfacing as `no such column` at the first

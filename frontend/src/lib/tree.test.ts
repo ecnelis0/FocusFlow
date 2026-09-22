@@ -21,6 +21,8 @@ function concept(
     parent_id,
     sequence,
     when_label,
+    map_x: null,
+    map_y: null,
     question_count: 0,
     images: [],
   };
@@ -331,5 +333,27 @@ describe("layout — the shape follows the material", () => {
     expect(details).toHaveLength(2);
     // Screen coordinates: below means a larger y than the branch row at 0.
     for (const detail of details) expect(detail.y).toBeGreaterThan(0);
+  });
+});
+
+describe("layout — a card that was dragged", () => {
+  it("stays where it was put, rather than being laid out again", () => {
+    const moved = { ...concept("a", "Dragged"), map_x: 1234, map_y: -567 };
+    const { nodes } = layout([moved, concept("b", "Left alone")]);
+
+    const dragged = nodes.find((node) => node.id === "a")!;
+    expect([dragged.x, dragged.y]).toEqual([1234, -567]);
+    // The other one is still placed by the layout, not stacked on the origin.
+    const other = nodes.find((node) => node.id === "b")!;
+    expect([other.x, other.y]).not.toEqual([1234, -567]);
+  });
+
+  it("ignores half a position rather than slamming the card to an axis", () => {
+    // A row with one coordinate set is a bug somewhere upstream; reading the
+    // missing one as 0 would silently park the card against the origin.
+    const half = { ...concept("a", "Half"), map_x: 900, map_y: null };
+    const { nodes } = layout([half, concept("b", "Other")]);
+
+    expect(nodes.find((node) => node.id === "a")!.x).not.toBe(900);
   });
 });

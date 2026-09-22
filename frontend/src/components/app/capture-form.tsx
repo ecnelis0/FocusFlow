@@ -170,15 +170,67 @@ function useRecorder(onDone: (file: File) => void) {
   return { supported, recording, seconds, start, stop };
 }
 
+/** The typed part of the form, kept in session storage.
+ *
+ *  A student pastes a YouTube link, wanders off to the bank to check which
+ *  folder they meant, comes back — and it had been thrown away. Session storage
+ *  rather than local: this is a half-finished action, not a saved document, and
+ *  it should not still be waiting a week later in another tab.
+ */
+const DRAFT_KEY = "focusflow:study-draft";
+
+interface Draft2 {
+  text: string;
+  url: string;
+  subject: string;
+  folderId: string | null;
+}
+
+const EMPTY_DRAFT: Draft2 = { text: "", url: "", subject: "", folderId: null };
+
+function restored(): Draft2 {
+  if (typeof window === "undefined") return EMPTY_DRAFT;
+  try {
+    const raw = window.sessionStorage.getItem(DRAFT_KEY);
+    return raw ? { ...EMPTY_DRAFT, ...(JSON.parse(raw) as Partial<Draft2>) } : EMPTY_DRAFT;
+  } catch {
+    // A corrupt or unreadable draft is not worth a broken page.
+    return EMPTY_DRAFT;
+  }
+}
+
+function useDraft({ text, url, subject, folderId }: Draft2) {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const empty = !text.trim() && !url.trim() && !subject.trim() && !folderId;
+    try {
+      if (empty) window.sessionStorage.removeItem(DRAFT_KEY);
+      else
+        window.sessionStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({ text, url, subject, folderId }),
+        );
+    } catch {
+      // Private mode, or a full quota. Losing the draft is the old behaviour.
+    }
+  }, [text, url, subject, folderId]);
+}
+
 export function CaptureForm() {
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
-  const [text, setText] = useState("");
-  const [url, setUrl] = useState("");
-  const [subject, setSubject] = useState("");
+  const [text, setText] = useState(() => restored().text);
+  const [url, setUrl] = useState(() => restored().url);
+  const [subject, setSubject] = useState(() => restored().subject);
   // Chosen before the material is read: it steers the reading, and it is where
   // everything approved from this capture is filed.
-  const [folderId, setFolderId] = useState<string | null>(null);
+  const [folderId, setFolderId] = useState<string | null>(() => restored().folderId);
+
+  // Kept across a navigation. Pasting a link and then glancing at the bank used
+  // to throw the link away, which is the one thing a page you paste into must
+  // not do. The file is deliberately not kept - a File cannot be serialised, and
+  // pretending one had survived would be worse than plainly losing it.
+  useDraft({ text, url, subject, folderId });
   // Three stages: the form, the proposal being edited, and what was filed.
   const [proposal, setProposal] = useState<CaptureProposal | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);

@@ -65,9 +65,25 @@ export default function ConceptPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link href="/concepts" className="text-sm text-muted-foreground hover:text-foreground">
-        ← Concepts
-      </Link>
+      {/* Two ways back, because there are two ways in. Arriving from the map and
+          being offered only "Concepts" means going the long way round to the
+          picture you were just looking at. The map link carries the concept's
+          own subject, so it opens on the branch this belongs to. */}
+      <div className="flex flex-wrap items-center gap-4">
+        <Link href="/concepts" className="text-sm text-muted-foreground hover:text-foreground">
+          ← Concepts
+        </Link>
+        <Link
+          href={
+            concept.subject
+              ? `/map?subject=${encodeURIComponent(concept.subject)}`
+              : "/map"
+          }
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
+          ← The map
+        </Link>
+      </div>
 
       <Card>
         <CardContent>

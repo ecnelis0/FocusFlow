@@ -55,6 +55,8 @@ def _read(concept: Concept) -> ConceptRead:
         parent_id=concept.parent_id,
         sequence=concept.sequence,
         when_label=concept.when_label,
+        map_x=concept.map_x,
+        map_y=concept.map_y,
         question_count=len(concept.mistakes),
         images=concept.images,
     )
@@ -118,6 +120,8 @@ async def list_concepts(session: SessionDep, user_id: UserDep) -> list[ConceptRe
             parent_id=concept.parent_id,
             sequence=concept.sequence,
             when_label=concept.when_label,
+            map_x=concept.map_x,
+            map_y=concept.map_y,
             question_count=counts.get(concept.id, 0),
             images=concept.images,
         )

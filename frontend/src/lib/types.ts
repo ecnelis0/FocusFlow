@@ -63,6 +63,10 @@ export interface Concept extends ConceptSummary {
   /** What that position is called, shown to the student: "1763", "Step 2".
    *  Null whenever the material named no moment; the order still holds. */
   when_label: string | null;
+  /** Where it was dragged on the map, or null while the layout decides. Both or
+   *  neither: half a position reads as a 0 on the other axis. */
+  map_x: number | null;
+  map_y: number | null;
   question_count: number;
   images: MistakeImage[];
 }
@@ -77,6 +81,9 @@ export interface ConceptDraft {
   /** Ignored when `folder_id` is sent: the folder decides the subject. */
   subject?: string | null;
   folder_id?: string | null;
+  /** Where it was dragged on the map. Sent as a pair or not at all. */
+  map_x?: number | null;
+  map_y?: number | null;
 }
 
 export interface MistakeImage {

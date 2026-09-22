@@ -182,6 +182,11 @@ class ConceptUpdate(BaseModel):
     body: str | None = None
     subject: str | None = Field(default=None, max_length=80)
     folder_id: str | None = None
+    # Where the student dragged it on the map. Sent as a pair, because half a
+    # position is not a position - the map would read the missing one as 0 and
+    # slam the card against the origin.
+    map_x: float | None = None
+    map_y: float | None = None
 
     @field_validator("title")
     @classmethod
@@ -218,6 +223,9 @@ class ConceptRead(BaseModel):
     # list falls back to the title so it is still deterministic.
     sequence: int | None = None
     when_label: str | None = None
+    # Null until the student drags it; the map computes a place for it until then.
+    map_x: float | None = None
+    map_y: float | None = None
     question_count: int = 0
     images: list[ImageRead] = []
 

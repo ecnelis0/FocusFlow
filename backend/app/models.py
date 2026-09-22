@@ -9,6 +9,7 @@ from sqlalchemy import (
     JSON,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -183,6 +184,13 @@ class Concept(Base):
     # only the student's material knows which. Null when nothing sensible fits, and
     # a timeline needs `sequence` regardless - this is the caption, not the key.
     when_label: Mapped[str | None] = mapped_column(String(60))
+
+    # Where the student dragged this on the map, in the map's own coordinates.
+    # Null means "wherever the layout puts it", which is every concept until one
+    # is moved by hand - so the computed shape stays the default and a nudge is
+    # remembered rather than reapplied every time the page is drawn.
+    map_x: Mapped[float | None] = mapped_column(Float)
+    map_y: Mapped[float | None] = mapped_column(Float)
 
     children: Mapped[list[Concept]] = relationship(
         back_populates="parent",

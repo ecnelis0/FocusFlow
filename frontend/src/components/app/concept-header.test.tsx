@@ -16,6 +16,8 @@ function concept(overrides: Partial<ConceptDetail> = {}): ConceptDetail {
   parent_id: null,
   sequence: null,
   when_label: null,
+  map_x: null,
+  map_y: null,
     created_at: new Date().toISOString(),
     updated_at: null,
     question_count: 3,

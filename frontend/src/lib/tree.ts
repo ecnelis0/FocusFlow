@@ -38,6 +38,17 @@ export interface MapLayout {
   edges: MapEdge[];
 }
 
+/** Where a concept actually goes: where it was dragged, or where it was laid out.
+ *
+ *  A dragged position is a decision the student made and it outranks the
+ *  computed one. Both coordinates or neither — half a position would read as a
+ *  0 on the other axis and slam the card against the origin. */
+function positionOf(concept: Concept, computed: { x: number; y: number }) {
+  return concept.map_x !== null && concept.map_y !== null
+    ? { x: concept.map_x, y: concept.map_y }
+    : computed;
+}
+
 const BRANCH_RING = 450;
 const DETAIL_RING = 250;
 const PER_DETAIL = 46;
@@ -193,8 +204,7 @@ export function layout(concepts: Concept[]): MapLayout {
       hasDetails: details.length > 0,
       step: index + 1,
       whenLabel: branch.when_label,
-      x: bx,
-      y: by,
+      ...positionOf(branch, { x: bx, y: by }),
     });
 
     // One branch leads to the next, in the order the material runs. The caption
@@ -229,10 +239,12 @@ export function layout(concepts: Concept[]): MapLayout {
         hasDetails: false,
         step: position + 1,
         whenLabel: detail.when_label,
-        x: chronological ? bx : at(bx + Math.cos(angle) * ring),
-        y: chronological
-          ? at(by + SPINE_HEAD + position * SPINE_ROW)
-          : at(by + Math.sin(angle) * ring),
+        ...positionOf(detail, {
+          x: chronological ? bx : at(bx + Math.cos(angle) * ring),
+          y: chronological
+            ? at(by + SPINE_HEAD + position * SPINE_ROW)
+            : at(by + Math.sin(angle) * ring),
+        }),
       });
       // In a column, one tie from the branch to the head of it. Drawing a tie to
       // every detail would stack four lines down the same track, and the chain

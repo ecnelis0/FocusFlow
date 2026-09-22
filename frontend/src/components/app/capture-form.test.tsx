@@ -88,6 +88,8 @@ const filed: CaptureResult = {
         parent_id: null,
         sequence: null,
         when_label: null,
+        map_x: null,
+        map_y: null,
         created_at: new Date().toISOString(),
         updated_at: null,
         question_count: 0,
@@ -105,11 +107,41 @@ async function scan(user: ReturnType<typeof userEvent.setup>) {
 
 describe("CaptureForm", () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.restoreAllMocks();
     send.mockReset();
     approve.mockReset();
     discard.mockReset();
     vi.spyOn(api, "listConcepts").mockResolvedValue([]);
+  });
+
+  it("keeps what was typed when the page is left and come back to", async () => {
+    // Pasting a link and then glancing at the bank used to throw the link away,
+    // which is the one thing a page you paste into must not do.
+    const user = userEvent.setup();
+    const { unmount } = renderWithQuery(<CaptureForm />);
+
+    await user.type(screen.getByLabelText("YouTube link"), "https://youtu.be/abc12345678");
+    await user.type(screen.getByLabelText("Subject"), "Biology");
+    unmount();
+
+    renderWithQuery(<CaptureForm />);
+    expect(screen.getByLabelText("YouTube link")).toHaveValue(
+      "https://youtu.be/abc12345678",
+    );
+    expect(screen.getByLabelText("Subject")).toHaveValue("Biology");
+  });
+
+  it("forgets the draft once there is nothing left in it", async () => {
+    // Otherwise an emptied form comes back full the next time it is opened.
+    const user = userEvent.setup();
+    const first = renderWithQuery(<CaptureForm />);
+    await user.type(screen.getByLabelText("Notes to file"), "something");
+    await user.clear(screen.getByLabelText("Notes to file"));
+    first.unmount();
+
+    renderWithQuery(<CaptureForm />);
+    expect(screen.getByLabelText("Notes to file")).toHaveValue("");
   });
 
   it("is disabled until there is something to send", () => {
