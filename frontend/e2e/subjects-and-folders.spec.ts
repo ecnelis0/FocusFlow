@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { logQuestion } from "./helpers";
+import { expandMaterial, logQuestion, questionCard } from "./helpers";
 
 /** The specs share one database and run in a single worker, so nothing here may
  *  assume the bank lacks something — every name is stamped, and every assertion
@@ -41,16 +41,16 @@ test("a subject tab exists before anything is logged into it, and holds folders"
   await expect(page.getByRole("button", { name: `Open ${unitThree}` })).toBeVisible();
   await expect(page.getByRole("button", { name: `Open ${unitFour}` })).toBeVisible();
 
-  // A folder you just made is empty, which is correct and reads like a broken
-  // filter. It has to say which folder, not "nothing matches".
+  // A folder you just made is empty, which is correct and reads like something
+  // broken. It has to say what putting something in looks like.
   await page.getByRole("button", { name: `Open ${unitThree}` }).click();
-  await expect(page.getByText(`Nothing is in “${unitThree}” yet.`)).toBeVisible();
+  await expect(page.getByText("Nothing put in here yet.")).toBeVisible();
 
   // The filter is in the URL, so it survives a reload and is a link you can share.
   const url = page.url();
   expect(url).toContain("folder=");
   await page.reload();
-  await expect(page.getByText(`Nothing is in “${unitThree}” yet.`)).toBeVisible();
+  await expect(page.getByText("Nothing put in here yet.")).toBeVisible();
 });
 
 test("a question filed into a folder appears there and nowhere else", async ({ page }) => {
@@ -69,11 +69,11 @@ test("a question filed into a folder appears there and nowhere else", async ({ p
   await page.getByLabel("Folder").selectOption({ label: folder });
   await expect(page.getByText(`Filed in ${folder}`)).toBeVisible();
 
-  // The folder it went into shows it.
+  // The folder it went into lists the material, which opens to the question.
   await page.goto("/bank");
   await page.getByRole("tab", { name: new RegExp(subject) }).click();
   await page.getByRole("button", { name: `Open ${folder}` }).click();
-  await expect(page.getByText(question)).toBeVisible();
+  await expect(questionCard(page, question)).toHaveCount(1, { timeout: 15_000 });
 
   // The sibling folder does not. Asserted as an invariant about this question,
   // not as "the folder is empty" — another spec may put something in it.
@@ -101,7 +101,7 @@ test("deleting a folder keeps the question, in the subject, unfiled", async ({ p
   await expect(page.getByRole("button", { name: `Open ${folder}` })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open Not in a folder" })).toBeVisible();
   await page.getByRole("button", { name: "Open Not in a folder" }).click();
-  await expect(page.getByText(question)).toBeVisible();
+  await expect(questionCard(page, question)).toHaveCount(1, { timeout: 15_000 });
 });
 
 // Pasted text with no question in it, so this covers the concepts half only; the
@@ -240,8 +240,9 @@ test("a file uploaded into a chosen folder lands there, concepts and questions a
   await expect(card).toContainText("2 questions");
   await expect(card).toContainText("2 concepts");
 
-  // And opening it shows the question that came out of the file.
+  // And opening the folder, then the material, shows the question it produced.
   await card.click();
   await expect(page).toHaveURL(/folder=/);
-  await expect(page.getByRole("main").getByText(asked)).toBeVisible({ timeout: 10_000 });
+  await expandMaterial(page);
+  await expect(questionCard(page, asked)).toHaveCount(1, { timeout: 15_000 });
 });

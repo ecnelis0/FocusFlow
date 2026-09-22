@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { addFolder, addMaterial, logQuestion, stamped } from "./helpers";
+import { addFolder, addMaterial, expandMaterial, logQuestion, stamped } from "./helpers";
 
 /** The bank's filters, on the facets that still exist.
  *
@@ -58,7 +58,12 @@ test("a folder narrows the bank to what was put into it", async ({ page }) => {
   await page.getByRole("button", { name: `Open ${wanted}` }).click();
 
   await expect(page).toHaveURL(/folder=/);
-  const main = page.getByRole("main");
-  await expect(main.getByText(inWanted)).toBeVisible({ timeout: 15_000 });
-  await expect(main.getByText(inOther)).toBeHidden();
+
+  // The folder lists what was put into it; the concepts are inside the material.
+  // Matched by their link, because the concept's title and its body both carry
+  // the text and the summary above quotes it a third time.
+  await expandMaterial(page);
+  const concepts = page.locator('a[href^="/concepts/"]');
+  await expect(concepts.filter({ hasText: inWanted })).toHaveCount(1, { timeout: 15_000 });
+  await expect(concepts.filter({ hasText: inOther })).toHaveCount(0);
 });

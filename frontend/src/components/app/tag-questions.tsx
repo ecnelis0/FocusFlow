@@ -17,7 +17,12 @@ export function TagQuestions({ concept }: { concept: ConceptDetail }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [untaggedOnly, setUntaggedOnly] = useState(true);
+  // Off by default. It used to be on, back when questions were logged by hand
+  // and arrived under no concept at all — the common case was finding one of
+  // those. Capture files every question under the concept its own material
+  // produced, so "only questions with no concept yet" now hides the entire bank
+  // and the picker opens empty.
+  const [untaggedOnly, setUntaggedOnly] = useState(false);
 
   const { data: candidates, isPending } = useQuery({
     queryKey: keys.mistakes({ q: search.trim() || undefined }),

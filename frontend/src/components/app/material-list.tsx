@@ -202,11 +202,32 @@ export function MaterialList({
     queryFn: () => api.listMaterials(filters),
   });
 
+  // A question can be moved into a folder on its own, from its own page, and its
+  // material stays where it was. Listing only materials would then show an empty
+  // folder that demonstrably holds something - so the strays are listed too.
+  const strays = useQuery({
+    queryKey: ["mistakes", "stray", filters],
+    queryFn: () =>
+      api.searchMistakes({
+        ...(folderId ? { folder_ids: [folderId] } : {}),
+        ...(subject ? { subjects: [subject] } : {}),
+        sort: "newest",
+        limit: 100,
+      }),
+    enabled: folderId !== undefined || subject !== undefined,
+  });
+
   if (isPending) return <Skeleton className="h-40 w-full" />;
   // Never the empty state for a failed load: "nothing in here" is the one thing
   // that would make a student think their work was gone.
   if (isError) return <Unreachable error={error as Error} />;
-  if (data.length === 0) {
+
+  const here = new Set(data.map((material) => material.id));
+  const loose = (strays.data ?? []).filter(
+    (question) => question.material_id === null || !here.has(question.material_id),
+  );
+
+  if (data.length === 0 && loose.length === 0) {
     return (
       <Empty
         title="Nothing put in here yet."
@@ -217,12 +238,44 @@ export function MaterialList({
   }
 
   return (
-    <ul className="space-y-3">
-      {data.map((material) => (
-        <li key={material.id}>
-          <MaterialCard material={material} />
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-5">
+      {data.length > 0 && (
+        <ul className="space-y-3">
+          {data.map((material) => (
+            <li key={material.id}>
+              <MaterialCard material={material} />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {loose.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-[11px] font-medium tracking-[0.09em] text-muted-foreground uppercase">
+            Also filed here
+          </h3>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Questions moved into this folder on their own. What they came from is
+            filed somewhere else.
+          </p>
+          <ul className="space-y-1">
+            {loose.map((question) => (
+              <li key={question.id}>
+                <Link
+                  href={`/bank/${question.id}`}
+                  className="block rounded-lg px-3 py-2 transition-colors hover:bg-muted/60"
+                >
+                  <span className="block text-sm">{question.question_text}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    <span className="font-medium">Answer</span>{" "}
+                    <span className="font-mono">{question.correct_answer}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
