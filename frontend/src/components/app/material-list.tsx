@@ -1,12 +1,14 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Empty } from "@/components/app/empty";
 import { Panel } from "@/components/app/panel";
+import { RemoveButton } from "@/components/app/remove-button";
 import { Unreachable } from "@/components/app/unreachable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, keys } from "@/lib/api";
@@ -143,8 +145,19 @@ function MaterialBody({ id }: { id: string }) {
 }
 
 function MaterialCard({ material }: { material: Material }) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const kind = KIND_LABELS[material.kind] ?? material.kind;
+
+  const remove = useMutation({
+    mutationFn: () => api.deleteMaterial(material.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["materials"] });
+      queryClient.invalidateQueries({ queryKey: ["mistakes"] });
+      toast.success("Removed. The concepts and questions from it are still filed.");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   return (
     <Panel className="group/material relative">
@@ -153,10 +166,19 @@ function MaterialCard({ material }: { material: Material }) {
       <Link
         href={`/materials/${material.id}/notes`}
         aria-label={`${material.has_notes ? "Read the notes on" : "Write notes from"} ${material.title}`}
-        className="absolute top-3 right-3 z-10 rounded-md border px-2 py-0.5 text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover/material:opacity-100 focus-visible:opacity-100"
+        className="absolute top-3 right-9 z-10 rounded-md border px-2 py-0.5 text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover/material:opacity-100 focus-visible:opacity-100"
       >
         {material.has_notes ? "Notes" : "Write notes"}
       </Link>
+
+      <span className="absolute top-3 right-2 z-10 opacity-0 transition-opacity group-hover/material:opacity-100 focus-within:opacity-100">
+        <RemoveButton
+          name={material.title}
+          keeps="its concepts stay"
+          pending={remove.isPending}
+          onRemove={() => remove.mutate()}
+        />
+      </span>
 
       <button
         type="button"

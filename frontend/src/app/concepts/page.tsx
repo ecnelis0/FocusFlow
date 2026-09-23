@@ -1,13 +1,15 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { ConceptForm } from "@/components/app/concept-form";
 import { Empty } from "@/components/app/empty";
 import { PageHeader } from "@/components/app/page-header";
 import { Unreachable } from "@/components/app/unreachable";
+import { RemoveButton } from "@/components/app/remove-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,7 +42,21 @@ function groupBySubject(
 }
 
 export default function ConceptsPage() {
+  const queryClient = useQueryClient();
   const [writing, setWriting] = useState(false);
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteConcept(id),
+    onSuccess: () => {
+      // The bank counts concepts per subject and per folder, and the map draws
+      // from the same list, so all three go stale together.
+      queryClient.invalidateQueries({ queryKey: keys.concepts() });
+      queryClient.invalidateQueries({ queryKey: keys.subjects() });
+      queryClient.invalidateQueries({ queryKey: ["materials"] });
+      toast.success("Removed. The questions under it are still in the bank.");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
   // Every group open to begin with, so the state is the ones that were shut. A
   // collapsed list of two things is worse than no grouping, and a group that
   // starts shut hides a concept you just wrote.
@@ -113,10 +129,10 @@ export default function ConceptsPage() {
                 {open && (
                   <ul className="space-y-2 border-t px-3 py-3">
                     {inGroup.map((concept) => (
-                      <li key={concept.id}>
+                      <li key={concept.id} className="group/concept relative">
                         <Link
                           href={`/concepts/${concept.id}`}
-                          className="block rounded-lg border px-4 py-3 transition-colors hover:border-foreground/20 hover:bg-muted/30"
+                          className="block rounded-lg border px-4 py-3 pr-24 transition-colors hover:border-foreground/20 hover:bg-muted/30"
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-medium">{concept.title}</h3>
@@ -131,6 +147,16 @@ export default function ConceptsPage() {
                             </p>
                           )}
                         </Link>
+                        {/* Outside the link, not inside it: a button nested in an
+                            anchor is invalid, and the click would navigate. */}
+                        <span className="absolute top-2.5 right-2.5 opacity-0 transition-opacity group-hover/concept:opacity-100 focus-within:opacity-100">
+                          <RemoveButton
+                            name={concept.title}
+                            keeps="its questions stay"
+                            pending={remove.isPending}
+                            onRemove={() => remove.mutate(concept.id)}
+                          />
+                        </span>
                       </li>
                     ))}
                   </ul>

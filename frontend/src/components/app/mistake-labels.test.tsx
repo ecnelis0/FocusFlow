@@ -66,7 +66,7 @@ describe("MistakeLabels", () => {
     renderWithQuery(<MistakeLabels mistake={makeMistake({ tags: [] })} editable />);
 
     expect(
-      await screen.findByRole("button", { name: /ran out of time/ }),
+      await screen.findByRole("button", { name: /^ran out of time/ }),
     ).toBeInTheDocument();
   });
 

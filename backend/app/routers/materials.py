@@ -154,3 +154,27 @@ async def write_notes(
     material.notes_written_at = utcnow()
     await session.commit()
     return document
+
+
+@router.delete("/{material_id}", status_code=204)
+async def delete_material(material_id: str, session: SessionDep, user_id: UserDep) -> None:
+    """Throw away the record of an upload. What came out of it stays.
+
+    The same rule the rest of the app files under: losing where something came
+    from is bad, losing the concept is unthinkable. So the concepts and questions
+    survive - they keep their folder, and the folder lists them as filed directly
+    rather than under a material.
+
+    Both links are left to SQLAlchemy rather than cut by hand here. That is the
+    opposite of the rule for folders and subjects, and for a reason: those unfile
+    rows by a bulk `UPDATE ... WHERE folder_id IN (...)`, which never loads them,
+    so nothing would notice the change. A deleted ORM object does get noticed -
+    the session nulls the foreign key on a loaded one-to-many and deletes the
+    rows of a `secondary` table itself. Cutting them again by hand was two lines
+    that no sabotage could make fail, which is the definition of not being
+    load-bearing. The test below is what guards the behaviour.
+    """
+    material = await _load(session, user_id, material_id)
+
+    await session.delete(material)
+    await session.commit()

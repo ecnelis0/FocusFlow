@@ -6,6 +6,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Panel } from "@/components/app/panel";
+import { RemoveButton } from "@/components/app/remove-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api, keys } from "@/lib/api";
@@ -198,15 +199,13 @@ function FolderCard({
         )}
 
         {onRemove && (
-          <button
-            type="button"
-            onClick={onRemove}
-            aria-label={`Remove ${name}`}
-            title={`Remove ${name}`}
-            className="rounded-md px-1.5 py-0.5 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100"
-          >
-            ×
-          </button>
+          <span className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            <RemoveButton
+              name={name}
+              keeps="its questions stay"
+              onRemove={onRemove}
+            />
+          </span>
         )}
       </div>
     </Panel>

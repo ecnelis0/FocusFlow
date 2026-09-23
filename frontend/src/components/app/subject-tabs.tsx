@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { RemoveButton } from "@/components/app/remove-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api, keys } from "@/lib/api";
@@ -35,6 +36,21 @@ export function SubjectTabs({
   const queryClient = useQueryClient();
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
+
+  const remove = useMutation({
+    mutationFn: (subject: Subject) => api.deleteSubject(subject.id),
+    onSuccess: (_result, subject) => {
+      queryClient.invalidateQueries({ queryKey: keys.subjects() });
+      queryClient.invalidateQueries({ queryKey: ["mistakes"] });
+      queryClient.invalidateQueries({ queryKey: ["materials"] });
+      queryClient.invalidateQueries({ queryKey: keys.concepts() });
+      // The tab being looked at has just gone; falling back to All beats leaving
+      // the bank filtered by a subject that no longer exists.
+      if (selected === subject.name) onSelect(null);
+      toast.success(`Removed ${subject.name}. Everything in it is still in the bank.`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const create = useMutation({
     mutationFn: (value: string) => api.createSubject(value),
@@ -68,13 +84,24 @@ export function SubjectTabs({
           onClick={() => onSelect(null)}
         />
         {subjects.map((subject) => (
-          <Tab
-            key={subject.id}
-            label={subject.name}
-            count={countOf(subject)}
-            active={selected === subject.name}
-            onClick={() => onSelect(subject.name)}
-          />
+          // The remove sits beside the tab, not inside it: a button within a
+          // button is invalid, and its name would be swallowed by the tab's.
+          <span key={subject.id} className="group/subject inline-flex items-center">
+            <Tab
+              label={subject.name}
+              count={countOf(subject)}
+              active={selected === subject.name}
+              onClick={() => onSelect(subject.name)}
+            />
+            <span className="-ml-1 opacity-0 transition-opacity group-hover/subject:opacity-100 focus-within:opacity-100">
+              <RemoveButton
+                name={subject.name}
+                keeps="its questions stay"
+                pending={remove.isPending}
+                onRemove={() => remove.mutate(subject)}
+              />
+            </span>
+          </span>
         ))}
 
         {naming ? (

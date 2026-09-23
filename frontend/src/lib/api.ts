@@ -215,6 +215,10 @@ export const api = {
 
   deleteFolder: (id: string) => request<void>(`/folders/${id}`, { method: "DELETE" }),
 
+  /** Take a label off every question carrying it. The questions are untouched. */
+  deleteTag: (tag: string) =>
+    request<void>(`/tags/${encodeURIComponent(tag)}`, { method: "DELETE" }),
+
   /** What you have put in, newest first. Narrowed to a folder, this is what a
    *  folder lists. */
   listMaterials: (filters: { folder_id?: string; subject?: string } = {}) =>
@@ -222,6 +226,10 @@ export const api = {
 
   /** One material opened: the concepts and questions that came out of it. */
   getMaterial: (id: string) => request<MaterialDetail>(`/materials/${id}`),
+
+  /** Throw away the record of an upload. What came out of it stays. */
+  deleteMaterial: (id: string) =>
+    request<void>(`/materials/${id}`, { method: "DELETE" }),
 
   /** The written-up revision page, or null when none has been asked for. */
   getNotes: (id: string) => request<NoteDocument | null>(`/materials/${id}/notes`),

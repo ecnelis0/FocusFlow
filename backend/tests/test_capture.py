@@ -9,6 +9,7 @@ import pytest
 from PIL import Image
 
 from app.analysis.extract import CaptureInput, ClaudeExtractor, ExistingConcept
+from tests.conftest import MATH_MISTAKE, add_question
 from tests.fakes import anthropic_stub
 
 NOTES = """\
@@ -582,3 +583,38 @@ async def test_a_folder_still_beats_a_typed_subject_for_the_material(client):
     ]
     assert material["subject"] == "APUSH"
     assert material["folder_id"] == folder_id
+
+
+async def test_deleting_a_material_keeps_what_came_out_of_it(client):
+    """Losing where something came from is bad; losing the concept is unthinkable."""
+    proposal = (await client.post("/capture", data={"text": NOTES})).json()
+    filed = await approve(client, proposal)
+    material_id = filed["material_id"]
+    concept_ids = sorted(change["concept"]["id"] for change in filed["changes"])
+
+    assert (await client.delete(f"/materials/{material_id}")).status_code == 204
+    assert (await client.get(f"/materials/{material_id}")).status_code == 404
+
+    # The concepts are still there, and so are the questions - now filed directly
+    # rather than under a material.
+    assert sorted(c["id"] for c in (await client.get("/concepts")).json()) == concept_ids
+    for question in (await client.get("/mistakes")).json():
+        assert question["material_id"] is None
+
+
+async def test_deleting_a_label_takes_it_off_every_question_and_leaves_them(
+    client, session_factory
+):
+    both = await add_question(session_factory, {**MATH_MISTAKE, "tags": ["by mistake", "guessed"]})
+    other = await add_question(session_factory, {**MATH_MISTAKE, "tags": ["By Mistake"]})
+    untouched = await add_question(session_factory, {**MATH_MISTAKE, "tags": ["guessed"]})
+
+    assert (await client.delete("/tags/by mistake")).status_code == 204
+
+    # Case-insensitively, because they are one label everywhere else in the app.
+    assert (await client.get(f"/mistakes/{both}")).json()["tags"] == ["guessed"]
+    assert (await client.get(f"/mistakes/{other}")).json()["tags"] is None
+    assert (await client.get(f"/mistakes/{untouched}")).json()["tags"] == ["guessed"]
+
+    # And it is gone from the list the picker offers.
+    assert not [t for t in (await client.get("/tags")).json() if t["tag"].lower() == "by mistake"]

@@ -1,8 +1,10 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { toast } from "sonner";
 
+import { RemoveButton } from "@/components/app/remove-button";
 import { Input } from "@/components/ui/input";
 import { api, keys } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -22,7 +24,24 @@ export function TagPicker({
   disabled?: boolean;
 }) {
   const [draft, setDraft] = useState("");
+  const queryClient = useQueryClient();
   const { data: known } = useQuery({ queryKey: keys.tags(), queryFn: api.listTags });
+
+  // Deleting a label is bank-wide, which is a different act from taking it off
+  // this question — so it lives on the list of labels that already exist rather
+  // than on the chips above, where the two would be one click apart and read the
+  // same. The questions themselves are untouched either way.
+  const forget = useMutation({
+    mutationFn: (tag: string) => api.deleteTag(tag),
+    onSuccess: (_result, tag) => {
+      queryClient.invalidateQueries({ queryKey: keys.tags() });
+      queryClient.invalidateQueries({ queryKey: ["mistakes"] });
+      queryClient.invalidateQueries({ queryKey: ["mistake"] });
+      onChange(selected.filter((item) => item.toLowerCase() !== tag.toLowerCase()));
+      toast.success(`Removed "${tag}" from every question carrying it.`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const chosen = new Set(selected.map((tag) => tag.toLowerCase()));
   const offered = (known ?? []).filter((entry) => !chosen.has(entry.tag.toLowerCase()));
@@ -73,23 +92,35 @@ export function TagPicker({
       />
 
       {offered.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {offered.slice(0, 10).map((entry) => (
-            <button
+            <span
               key={entry.tag}
-              type="button"
-              disabled={disabled}
-              onClick={() => add(entry.tag)}
               className={cn(
-                "rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:bg-muted",
+                "group/label inline-flex items-center rounded-full border pr-0.5 text-xs",
                 entry.suggested ? "border-dashed text-muted-foreground" : "",
               )}
             >
-              {entry.tag}
-              {entry.count > 0 && (
-                <span className="ml-1 text-muted-foreground">{entry.count}</span>
-              )}
-            </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => add(entry.tag)}
+                className="rounded-full py-0.5 pl-2.5 transition-colors hover:text-foreground"
+              >
+                {entry.tag}
+                {entry.count > 0 && (
+                  <span className="ml-1 text-muted-foreground">{entry.count}</span>
+                )}
+              </button>
+              <span className="opacity-0 transition-opacity group-hover/label:opacity-100 focus-within:opacity-100">
+                <RemoveButton
+                  name={`the label ${entry.tag}`}
+                  keeps="off every question"
+                  pending={forget.isPending}
+                  onRemove={() => forget.mutate(entry.tag)}
+                />
+              </span>
+            </span>
           ))}
         </div>
       )}

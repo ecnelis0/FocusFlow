@@ -46,9 +46,9 @@ describe("TagPicker", () => {
 
     renderWithQuery(<TagPicker selected={[]} onChange={vi.fn()} />);
 
-    const used = await screen.findByRole("button", { name: /by mistake/ });
+    const used = await screen.findByRole("button", { name: /^by mistake/ });
     expect(used).toHaveTextContent("4");
-    expect(screen.getByRole("button", { name: /ran out of time/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^ran out of time/ })).toBeInTheDocument();
   });
 
   it("adds a suggested label in one click", async () => {
@@ -57,7 +57,7 @@ describe("TagPicker", () => {
     const user = userEvent.setup();
 
     renderWithQuery(<TagPicker selected={[]} onChange={onChange} />);
-    await user.click(await screen.findByRole("button", { name: /ran out of time/ }));
+    await user.click(await screen.findByRole("button", { name: /^ran out of time/ }));
 
     expect(onChange).toHaveBeenCalledWith(["ran out of time"]);
   });
@@ -67,7 +67,7 @@ describe("TagPicker", () => {
 
     renderWithQuery(<TagPicker selected={["by mistake"]} onChange={vi.fn()} />);
 
-    await screen.findByRole("button", { name: /ran out of time/ });
+    await screen.findByRole("button", { name: /^ran out of time/ });
     // Present once as a removable chip, never again as something to add.
     expect(
       screen.queryByRole("button", { name: /^by mistake/ }),

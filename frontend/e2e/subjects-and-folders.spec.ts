@@ -95,7 +95,9 @@ test("deleting a folder keeps the question, in the subject, unfiled", async ({ p
 
   await page.goto("/bank");
   await page.getByRole("tab", { name: new RegExp(subject) }).click();
+  // Two steps: the × arms, and the armed button names what is about to go.
   await page.getByRole("button", { name: `Remove ${folder}` }).click();
+  await page.getByRole("button", { name: `Confirm removing ${folder}` }).click();
 
   // Losing where something was filed is bad. Losing the question is unthinkable.
   await expect(page.getByRole("button", { name: `Open ${folder}` })).toHaveCount(0);
