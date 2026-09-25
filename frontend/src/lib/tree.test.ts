@@ -21,6 +21,7 @@ function concept(
     parent_id,
     sequence,
     when_label,
+    motif: null,
     map_x: null,
     map_y: null,
     question_count: 0,

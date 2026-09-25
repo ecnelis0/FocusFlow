@@ -229,6 +229,9 @@ class ConceptRead(BaseModel):
     # list falls back to the title so it is still deterministic.
     sequence: int | None = None
     when_label: str | None = None
+    # The scene the map draws for it. Null for anything filed before the
+    # extractor was asked to pick one; the client matches those from their words.
+    motif: str | None = None
     # Null until the student drags it; the map computes a place for it until then.
     map_x: float | None = None
     map_y: float | None = None

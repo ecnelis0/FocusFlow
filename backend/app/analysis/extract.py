@@ -22,6 +22,16 @@ from .base import AnalysisFailed
 
 CaptureKind = Literal["image", "pdf", "text", "audio", "video"]
 
+# The scenes the map can draw. Closed, and mirrored exactly by MOTIF_ART in
+# `frontend/src/components/app/motifs.tsx` — a name the model invents is a card
+# with a blank where its picture should be, so the model is given the list and
+# the app draws whichever one comes back.
+Motif = Literal[
+    "crown", "flag", "battle", "carriage", "ship", "assembly", "law", "money",
+    "factory", "treaty", "map", "idea", "flask", "cell", "atom", "brain",
+    "equation", "graph", "book", "clock", "institution",
+]
+
 
 class ExistingConcept(BaseModel):
     """A concept already in the bank, so the model can merge rather than duplicate."""
@@ -60,6 +70,19 @@ class ExtractedConcept(BaseModel):
         description="The concept in two to six sentences, written for the student to "
         "revise from later: what it is, the trap it sets, and how to apply it. Keep the "
         "student's own examples and phrasing where they exist."
+    )
+    motif: Motif | None = Field(
+        default=None,
+        description="The scene the map should draw for this concept. Pick the one that shows "
+        "what it is *about*, not the subject it belongs to: 'battle' for a war breaking out, "
+        "'carriage' for a flight or a journey, 'crown' for a monarchy, 'flag' for a rising or "
+        "a republic, 'assembly' for a vote or a declaration, 'law' for an act or a "
+        "constitution, 'treaty' for an alliance or a peace, 'money' for taxes or trade, "
+        "'factory' for industry, 'ship' for a voyage or a colony, 'map' for territory, "
+        "'institution' for a state body or a court, 'idea' for a doctrine or a philosophy, "
+        "'clock' for a period or a sequence; 'brain', 'cell', 'atom', 'flask', 'equation', "
+        "'graph' for their sciences; 'book' when nothing else fits. Null only if the concept "
+        "genuinely has no shape.",
     )
     subject: str | None = Field(
         default=None,

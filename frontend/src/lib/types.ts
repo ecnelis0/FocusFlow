@@ -63,6 +63,10 @@ export interface Concept extends ConceptSummary {
   /** What that position is called, shown to the student: "1763", "Step 2".
    *  Null whenever the material named no moment; the order still holds. */
   when_label: string | null;
+  /** The scene the map draws for it, from the extractor's closed list. Null for
+   *  everything filed before there was one — `lib/motif.ts` matches those from
+   *  their own words. */
+  motif: string | null;
   /** Where it was dragged on the map, or null while the layout decides. Both or
    *  neither: half a position reads as a 0 on the other axis. */
   map_x: number | null;

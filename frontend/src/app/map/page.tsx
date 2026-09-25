@@ -95,7 +95,7 @@ function MapPage() {
           action={{ href: "/", label: "Add some material" }}
         />
       ) : (
-        <ConceptMap concepts={shown} />
+        <ConceptMap concepts={shown} hub={scope} />
       )}
     </div>
   );

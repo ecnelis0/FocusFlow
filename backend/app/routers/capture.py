@@ -83,6 +83,8 @@ class ProposedConcept(BaseModel):
     order: int = 0
     # What that position is called - "1763", "Step 2" - when the material says.
     when: str | None = None
+    # Which scene the map draws for it.
+    motif: str | None = None
     # Where in the notes it came from ("page 3"), when the model could tell.
     where: str | None
     # The existing concept the model says this is, if any. The student can drop it.
@@ -125,6 +127,10 @@ class ApprovedConcept(BaseModel):
     # rather than being read off the proposal again.
     order: int = Field(default=0, ge=0, le=10_000)
     when: str | None = Field(default=None, max_length=60)
+    # Comes back from the client with the rest: the student may have edited the
+    # title into something the model's pick no longer suits, and the picker in
+    # the client is what they were looking at when they approved.
+    motif: str | None = Field(default=None, max_length=32)
     existing_id: str | None = None
 
 
@@ -338,6 +344,8 @@ async def _file(
                 target.sequence = found.order
             if target.when_label is None and found.when:
                 target.when_label = " ".join(found.when.split())[:60] or None
+            if target.motif is None and found.motif:
+                target.motif = found.motif
             target.updated_at = utcnow()
             action = "updated"
         else:
@@ -352,6 +360,7 @@ async def _file(
                 subject=subject,
                 sequence=found.order or None,
                 when_label=" ".join((found.when or "").split())[:60] or None,
+                motif=found.motif,
             )
             target.mistakes = []
             target.images = []
@@ -480,6 +489,7 @@ def _propose(extraction: CaptureExtraction, existing: list[Concept]) -> list[Pro
                 parent_title=parents.get((found.parent_title or "").casefold()),
                 order=found.order,
                 when=" ".join((found.when or "").split())[:60] or None,
+                motif=found.motif,
                 where=found.where,
                 existing_id=match.id if match else None,
                 existing_title=match.title if match else None,

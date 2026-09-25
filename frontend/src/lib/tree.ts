@@ -4,6 +4,11 @@ import type { Concept } from "./types";
 export interface MapNode {
   id: string;
   title: string;
+  /** Carried so the card can choose its scene. The motif is picked from the
+   *  concept's own words when the extractor did not pick one while reading. */
+  body: string | null;
+  subject: string | null;
+  motif: string | null;
   questionCount: number;
   /** True when this sits at the top of the map rather than under something. */
   isBranch: boolean;
@@ -17,6 +22,12 @@ export interface MapNode {
   step: number | null;
   /** What that place is called — "1763", "Step 2" — or null. */
   whenLabel: string | null;
+  /** How many concepts hang off it. Shown on a branch that has been folded up,
+   *  which is otherwise a card that says nothing about what it is hiding. */
+  detailCount: number;
+  /** Which of the three things this is. `isBranch` and `hasDetails` still say
+   *  what they always said; this says how the card is drawn. */
+  kind: "hub" | "branch" | "detail";
   x: number;
   y: number;
 }
@@ -28,7 +39,7 @@ export interface MapEdge {
   /** "parent" hangs a detail off its branch; "next" is the order the material
    *  runs in, one concept leading to the one after it. Two different claims
    *  about two concepts, so they are drawn differently and never merged. */
-  kind: "parent" | "next";
+  kind: "parent" | "next" | "hub";
   /** The caption on a "next" edge, when the material named the moment. */
   label: string | null;
 }
@@ -37,6 +48,21 @@ export interface MapLayout {
   nodes: MapNode[];
   edges: MapEdge[];
 }
+
+export interface LayoutOptions {
+  /** The name in the middle — the subject, or the folder. A hub is only drawn
+   *  for a map that is actually about one thing; "everything, across every
+   *  subject" is not a centre, it is an absence of one. */
+  hub?: string | null;
+  /** Branches folded up. Their details are not laid out at all, which is the
+   *  point: a map of five themes is readable and the same map with ninety
+   *  details on it is wallpaper. */
+  collapsed?: ReadonlySet<string>;
+}
+
+/** The id of the centre. Not a concept id: nothing is stored for the hub, so it
+ *  cannot collide with one and cannot be opened, dragged or renamed. */
+export const HUB_ID = "__hub__";
 
 /** Where a concept actually goes: where it was dragged, or where it was laid out.
  *
@@ -49,10 +75,14 @@ function positionOf(concept: Concept, computed: { x: number; y: number }) {
     : computed;
 }
 
-const BRANCH_RING = 450;
-const DETAIL_RING = 250;
-const PER_DETAIL = 46;
-const GAP = 200;
+const BRANCH_RING = 560;
+const DETAIL_RING = 220;
+const GAP = 240;
+/** Details are chips now, not cards: a short stack of them beside their branch
+ *  rather than a ring around it. A ring of forty chips is a wreath nobody can
+ *  read, and it was the thing pushing the whole map kilometres wide. */
+const COLUMN_X = 250;
+const CHIP_ROW = 62;
 // Past this many branches a ring is too big to read; they go in a grid instead.
 const RING_LIMIT = 6;
 // The arc details hang on below their branch on a spine. Screen coordinates, so
@@ -61,9 +91,9 @@ const RING_LIMIT = 6;
 // drop between details after that. The first one is bigger because a branch card
 // is the tall one - an eyebrow, a title over three lines, and its question count,
 // which at an even 96 was being clipped by the detail underneath it.
-const CARD = 260;
-const SPINE_HEAD = 158;
-const SPINE_ROW = 110;
+const CARD = 300;
+const SPINE_HEAD = 200;
+const SPINE_ROW = CHIP_ROW;
 
 /** Rounds, and turns -0 into 0. `Math.round(Math.sin(-Math.PI / 2) * 0)` is -0,
  *  which compares equal to 0 everywhere except a strict deep-equal, so it shows
@@ -85,7 +115,8 @@ function at(value: number): number {
  *  one folder, say) is drawn as a branch of its own rather than vanishing, and so
  *  is one caught in a cycle. A mind map that silently omits things is worse than
  *  no mind map, because there is no way to tell. */
-export function layout(concepts: Concept[]): MapLayout {
+export function layout(concepts: Concept[], options: LayoutOptions = {}): MapLayout {
+  const collapsed = options.collapsed ?? new Set<string>();
   const present = new Set(concepts.map((concept) => concept.id));
 
   // A parent outside the set is no parent here. Same for a concept pointing at
@@ -148,8 +179,14 @@ export function layout(concepts: Concept[]): MapLayout {
   // instead and the arrows read left to right. Majority rather than all, because
   // a concept merged in from older notes keeps its own (absent) order, and one
   // of those must not flip the whole map back to a ring.
-  const numbered = branches.filter((branch) => branch.sequence !== null).length;
-  const chronological = branches.length > 1 && numbered * 2 > branches.length;
+  //
+  // The signal is the *named* moment, not the sequence number. Every concept
+  // gets a sequence — the reading numbers them all, so that a map has an order
+  // to walk through — and keying off it put every subject on a timeline,
+  // including the ones with no time in them. A `when_label` is the material
+  // itself saying "1763", and only material that says so gets a spine.
+  const dated = branches.filter((branch) => branch.when_label !== null).length;
+  const chronological = branches.length > 1 && dated * 2 > branches.length;
 
   const nodes: MapNode[] = [];
   const edges: MapEdge[] = [];
@@ -158,15 +195,20 @@ export function layout(concepts: Concept[]): MapLayout {
   // details sit on. Spacing is derived from this rather than fixed, so a branch
   // with twenty details does not overlap the one beside it.
   const ringFor = (id: string): number => {
-    const count = childrenOf.get(id)?.length ?? 0;
-    return count === 0 ? 0 : Math.max(DETAIL_RING, count * PER_DETAIL);
+    const count = collapsed.has(id) ? 0 : (childrenOf.get(id)?.length ?? 0);
+    // Half the height of the column of chips: what the branch needs above and
+    // below itself before it touches its neighbour.
+    return count === 0 ? 0 : Math.max(DETAIL_RING, (count * CHIP_ROW) / 2);
   };
   const widest = branches.reduce((most, branch) => Math.max(most, ringFor(branch.id)), 0);
   // A spine only ever needs one card's width per branch, because its details go
   // in a column underneath rather than around it. Sized like a ring instead,
   // five branches came out 3,500px across and the map opened at a quarter size:
   // every card present, not one of them readable.
-  const cell = chronological ? CARD + GAP : widest * 2 + GAP;
+  // Never less than a card and a gap. With no details at all `widest` is 0, so
+  // this came out at exactly the width of a card and every neighbour in the grid
+  // touched the one beside it.
+  const cell = chronological ? CARD + GAP : Math.max(CARD + GAP, widest * 2 + GAP);
 
   // Three arrangements, because one does not survive both ends of the range. A
   // ring is the picture people draw by hand and it reads beautifully for a few
@@ -193,23 +235,68 @@ export function layout(concepts: Concept[]): MapLayout {
     };
   };
 
+  // The centre. Only for a ring: on a spine the middle of the picture is
+  // already occupied by the third or fourth thing that happened, and a hub
+  // dropped on top of it would be a label sitting on a date.
+  const hubbed =
+    Boolean(options.hub) && !chronological && branches.length > 1 && branches.length <= RING_LIMIT;
+  if (hubbed) {
+    nodes.push({
+      id: HUB_ID,
+      title: options.hub as string,
+      body: null,
+      subject: options.hub as string,
+      motif: null,
+      questionCount: 0,
+      isBranch: false,
+      hasDetails: true,
+      step: null,
+      whenLabel: null,
+      detailCount: branches.length,
+      kind: "hub",
+      x: 0,
+      y: 0,
+    });
+  }
+
   branches.forEach((branch, index) => {
     const { x: bx, y: by } = place(index);
-    const details = childrenOf.get(branch.id) ?? [];
+    const all = childrenOf.get(branch.id) ?? [];
+    const details = collapsed.has(branch.id) ? [] : all;
     nodes.push({
       id: branch.id,
       title: branch.title,
+      body: branch.body,
+      subject: branch.subject,
+      motif: branch.motif ?? null,
       questionCount: branch.question_count,
       isBranch: true,
-      hasDetails: details.length > 0,
+      hasDetails: all.length > 0,
       step: index + 1,
       whenLabel: branch.when_label,
+      detailCount: all.length,
+      kind: "branch",
       ...positionOf(branch, { x: bx, y: by }),
     });
 
+    if (hubbed) {
+      edges.push({
+        id: `hub-${branch.id}`,
+        source: HUB_ID,
+        target: branch.id,
+        kind: "hub",
+        label: null,
+      });
+    }
+
     // One branch leads to the next, in the order the material runs. The caption
     // is the *arriving* concept's: an arrow into 1763 is labelled 1763.
-    const next = branches[index + 1];
+    //
+    // Only on a spine. On a ring the chain has to travel all the way round the
+    // circle, so five themes become five long dashed rectangles crossing every
+    // other thing on the map — and a ring is used precisely when the material
+    // had no chronology to show in the first place.
+    const next = chronological ? branches[index + 1] : undefined;
     if (next) {
       edges.push({
         id: `next-${branch.id}-${next.id}`,
@@ -222,34 +309,39 @@ export function layout(concepts: Concept[]): MapLayout {
 
     if (details.length === 0) return;
 
-    // A full circle around the branch, starting at the top. Fanning them away
-    // from the middle only means anything in a ring, and costs a special case
-    // that has to agree with `place` about where the middle is.
-    const ring = ringFor(branch.id);
+    // A column beside the branch rather than a ring around it, pushed to
+    // whichever side is away from the middle — so the chips hang off the outside
+    // of the map and the space between a branch and the hub stays clear for the
+    // line that joins them.
+    const outward = bx >= 0 ? 1 : -1;
+    const middle = (details.length - 1) / 2;
     details.forEach((detail, position) => {
-      // On a spine the details go straight down in a column, so a branch needs
-      // no more width than its own card and the row of branches stays a line you
-      // can read. On a ring they go all the way round, the hand-drawn picture.
-      const angle = (position / details.length) * Math.PI * 2 - Math.PI / 2;
       nodes.push({
         id: detail.id,
         title: detail.title,
+        body: detail.body,
+        subject: detail.subject,
+        motif: detail.motif ?? null,
         questionCount: detail.question_count,
         isBranch: false,
         hasDetails: false,
         step: position + 1,
         whenLabel: detail.when_label,
+        detailCount: 0,
+        kind: "detail",
         ...positionOf(detail, {
-          x: chronological ? bx : at(bx + Math.cos(angle) * ring),
+          x: chronological ? bx : at(bx + outward * COLUMN_X),
           y: chronological
             ? at(by + SPINE_HEAD + position * SPINE_ROW)
-            : at(by + Math.sin(angle) * ring),
+            : at(by + (position - middle) * CHIP_ROW),
         }),
       });
       // In a column, one tie from the branch to the head of it. Drawing a tie to
       // every detail would stack four lines down the same track, and the chain
       // below already says these all hang off the same branch.
       if (!chronological || position === 0) {
+        // On a ring each chip gets its own tie: they fan out sideways, so four
+        // lines do not stack down one track the way they do on a spine.
         edges.push({
           id: `${branch.id}-${detail.id}`,
           source: branch.id,
@@ -258,8 +350,12 @@ export function layout(concepts: Concept[]): MapLayout {
           label: null,
         });
       }
-      // And the details of one branch run in their own order too.
-      const after = details[position + 1];
+      // And the details of one branch run in their own order too — but only
+      // where there is an order to show. On a ring the chips are a stack beside
+      // their theme, read top to bottom, and chaining them drew a dashed line
+      // out of one chip's side and back into the next one's, all the way around
+      // the outside of the map.
+      const after = chronological ? details[position + 1] : undefined;
       if (after) {
         edges.push({
           id: `next-${detail.id}-${after.id}`,

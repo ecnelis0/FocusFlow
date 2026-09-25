@@ -173,6 +173,11 @@ class Concept(Base):
     parent: Mapped[Concept | None] = relationship(
         back_populates="children", remote_side=[id]
     )
+    # Which scene the map draws for it. A name from the extractor's closed list,
+    # or null for everything filed before there was a list — those are matched
+    # from their own words in the client, which is good enough for decoration
+    # and costs nothing to run.
+    motif: Mapped[str | None] = mapped_column(String(32), default=None)
     # Where this sits in the order the material runs: chronological for history,
     # procedural for a method, foundations-first otherwise. Numbered among siblings
     # - branches against branches, details against the details of their own branch -

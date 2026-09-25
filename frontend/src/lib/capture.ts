@@ -16,6 +16,8 @@ export interface ProposedConcept {
   order: number;
   /** What that place is called — "1763", "Step 2" — or null. */
   when: string | null;
+  /** The scene the map should draw for it, picked while the material was read. */
+  motif: string | null;
   /** Where in the notes it came from ("page 3"), when the model could tell. */
   where: string | null;
   /** The existing concept the model says this is. Dropping it files a new one. */
@@ -66,6 +68,7 @@ export interface ApprovedConcept {
   parent_title: string | null;
   order: number;
   when: string | null;
+  motif: string | null;
   existing_id: string | null;
 }
 
