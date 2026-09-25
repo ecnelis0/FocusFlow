@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
+import { BuildBase } from "@/components/app/build-base";
 import { ConceptHeader } from "@/components/app/concept-header";
 import { Empty } from "@/components/app/empty";
 import { FolderGrid } from "@/components/app/folder-grid";
@@ -235,6 +236,9 @@ function BankList() {
           </Button>
         </div>
       )}
+
+      {/* The way in, above whatever is already filed. */}
+      <BuildBase />
 
       {/* One concept selected: show the concept, then the questions under it. */}
       {selected.concept_ids.length === 1 && (
