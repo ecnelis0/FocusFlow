@@ -1,6 +1,8 @@
 import type {
   Answer,
   BankQuery,
+  ChatReply,
+  ChatTurn,
   Concept,
   ConceptDetail,
   ConceptDraft,
@@ -243,6 +245,12 @@ export const api = {
   /** Ask a question about the bank. The model writes the filter; the rows are real. */
   ask: (question: string) =>
     request<Answer>("/ask", { method: "POST", body: JSON.stringify({ question }) }),
+
+  /** Carry on the conversation. The whole transcript goes up each time: there is
+   *  no session on the server, and a conversation kept there would outlive the
+   *  one the student can see. */
+  chat: (messages: ChatTurn[]) =>
+    request<ChatReply>("/ask/chat", { method: "POST", body: JSON.stringify({ messages }) }),
 };
 
 /** Query keys, in one place so mutations can invalidate precisely. */

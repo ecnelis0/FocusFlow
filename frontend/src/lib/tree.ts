@@ -76,13 +76,22 @@ function positionOf(concept: Concept, computed: { x: number; y: number }) {
 }
 
 const BRANCH_RING = 560;
-const DETAIL_RING = 220;
+const DETAIL_RING = 300;
 const GAP = 240;
-/** Details are chips now, not cards: a short stack of them beside their branch
- *  rather than a ring around it. A ring of forty chips is a wreath nobody can
- *  read, and it was the thing pushing the whole map kilometres wide. */
-const COLUMN_X = 250;
+/** Details fan around their own theme, on an arc centred on the direction
+ *  pointing away from the middle of the map. A column beside the card was
+ *  tidier to compute and read as a list stapled to a picture; an arc reads as
+ *  things belonging to the thing in the middle of them, which is what they are.
+ *
+ *  `CHIP_ARC` is the room one chip needs along that arc, and the radius is
+ *  derived from it — so six details sit close in and twenty push out far enough
+ *  not to touch, instead of overlapping at a fixed distance. */
+const CHIP_ARC = 112;
 const CHIP_ROW = 62;
+/** How far round the branch the fan is allowed to go. Not a full circle: the
+ *  side facing the middle has to stay clear for the line coming in from the
+ *  hub, and a chip sitting on that line reads as attached to the wrong thing. */
+const MAX_FAN = Math.PI * 1.25;
 // Past this many branches a ring is too big to read; they go in a grid instead.
 const RING_LIMIT = 6;
 // The arc details hang on below their branch on a spine. Screen coordinates, so
@@ -194,12 +203,17 @@ export function layout(concepts: Concept[], options: LayoutOptions = {}): MapLay
   // How much room a branch needs to itself: its own card, plus the ring its
   // details sit on. Spacing is derived from this rather than fixed, so a branch
   // with twenty details does not overlap the one beside it.
-  const ringFor = (id: string): number => {
+  /** How wide the fan of details around this branch is allowed to spread, and
+   *  how far out it sits. Both come from the count: a fan of three is a shallow
+   *  arc close in, a fan of twenty is a wide one pushed out. */
+  const fanFor = (id: string): { spread: number; radius: number } => {
     const count = collapsed.has(id) ? 0 : (childrenOf.get(id)?.length ?? 0);
-    // Half the height of the column of chips: what the branch needs above and
-    // below itself before it touches its neighbour.
-    return count === 0 ? 0 : Math.max(DETAIL_RING, (count * CHIP_ROW) / 2);
+    if (count === 0) return { spread: 0, radius: 0 };
+    const spread = Math.min(MAX_FAN, 0.34 * count);
+    return { spread, radius: Math.max(DETAIL_RING, (count * CHIP_ARC) / spread) };
   };
+
+  const ringFor = (id: string): number => fanFor(id).radius;
   const widest = branches.reduce((most, branch) => Math.max(most, ringFor(branch.id)), 0);
   // A spine only ever needs one card's width per branch, because its details go
   // in a column underneath rather than around it. Sized like a ring instead,
@@ -309,11 +323,12 @@ export function layout(concepts: Concept[], options: LayoutOptions = {}): MapLay
 
     if (details.length === 0) return;
 
-    // A column beside the branch rather than a ring around it, pushed to
-    // whichever side is away from the middle — so the chips hang off the outside
-    // of the map and the space between a branch and the hub stays clear for the
-    // line that joins them.
-    const outward = bx >= 0 ? 1 : -1;
+    // The fan, centred on the direction away from the middle of the map — so a
+    // branch on the left throws its details further left and the space between
+    // it and the hub stays clear for the line that joins them. A branch sitting
+    // exactly in the middle has no "away", and fans upward.
+    const { spread, radius } = fanFor(branch.id);
+    const outward = bx === 0 && by === 0 ? -Math.PI / 2 : Math.atan2(by, bx);
     const middle = (details.length - 1) / 2;
     details.forEach((detail, position) => {
       nodes.push({
@@ -329,12 +344,19 @@ export function layout(concepts: Concept[], options: LayoutOptions = {}): MapLay
         whenLabel: detail.when_label,
         detailCount: 0,
         kind: "detail",
-        ...positionOf(detail, {
-          x: chronological ? bx : at(bx + outward * COLUMN_X),
-          y: chronological
-            ? at(by + SPINE_HEAD + position * SPINE_ROW)
-            : at(by + (position - middle) * CHIP_ROW),
-        }),
+        // On a spine the details stay in a column: the branches are already a
+        // row, and a fan on each of them would run into its neighbours.
+        ...positionOf(detail, (() => {
+          if (chronological) {
+            return { x: bx, y: at(by + SPINE_HEAD + position * SPINE_ROW) };
+          }
+          const step = details.length === 1 ? 0 : (position - middle) / (details.length - 1);
+          const angle = outward + step * spread;
+          return {
+            x: at(bx + Math.cos(angle) * radius),
+            y: at(by + Math.sin(angle) * radius),
+          };
+        })()),
       });
       // In a column, one tie from the branch to the head of it. Drawing a tie to
       // every detail would stack four lines down the same track, and the chain

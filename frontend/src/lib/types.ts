@@ -269,3 +269,19 @@ export interface NoteDocument {
   /** The mix-ups the material sets — where the marks actually go. */
   traps: string[];
 }
+
+/** One side of the conversation with the assistant. */
+export interface ChatTurn {
+  role: "student" | "assistant";
+  content: string;
+}
+
+/** What comes back from a turn: the answer, and the rows it was drawn from. */
+export interface ChatReply {
+  answer: string;
+  analyzer: string;
+  analyzer_ready: boolean;
+  filter_description: string;
+  mistakes: Mistake[];
+  error: string | null;
+}

@@ -85,8 +85,11 @@ export function SidePanel({ children }: { children: React.ReactNode }) {
         id="side-panel"
         aria-label="Ask the bank"
         className={cn(
-          "surface fixed top-14 right-0 bottom-0 z-50 w-full max-w-md border-l",
-          "overflow-y-auto p-5 shadow-lg sm:w-[26rem]",
+          "surface fixed top-14 right-0 bottom-0 z-50 flex w-full max-w-md flex-col border-l",
+          // Not `overflow-y-auto` on the rail itself any more: the transcript
+          // scrolls and the box under it stays put, which a single scrolling
+          // column cannot do.
+          "overflow-hidden shadow-lg sm:w-[26rem]",
         )}
       >
         {children}
