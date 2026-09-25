@@ -407,8 +407,9 @@ export function CaptureForm() {
             // map with no sequence at all while the proposal plainly showed one.
             order: draft.order,
             when: draft.when,
-            // The scene the reading chose for it, carried back untouched.
+            // The scene and the card the reading wrote, carried back untouched.
             motif: draft.motif,
+            card: draft.card,
             existing_id: draft.merge ? draft.existing_id : null,
           })),
         questions: questionDrafts

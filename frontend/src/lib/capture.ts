@@ -1,5 +1,5 @@
 import { API_URL, ApiError } from "./api";
-import type { Concept, Mistake } from "./types";
+import type { Concept, ConceptCard, Mistake } from "./types";
 
 /** Mirrors `backend/app/routers/capture.py`. */
 export type CaptureKind = "image" | "pdf" | "text" | "audio" | "video";
@@ -18,6 +18,9 @@ export interface ProposedConcept {
   when: string | null;
   /** The scene the map should draw for it, picked while the material was read. */
   motif: string | null;
+  /** The revision card the reading wrote for it. Sent back on approval
+   *  untouched: nothing on that page edits it yet. */
+  card: ConceptCard | null;
   /** Where in the notes it came from ("page 3"), when the model could tell. */
   where: string | null;
   /** The existing concept the model says this is. Dropping it files a new one. */
@@ -69,6 +72,7 @@ export interface ApprovedConcept {
   order: number;
   when: string | null;
   motif: string | null;
+  card: ConceptCard | null;
   existing_id: string | null;
 }
 

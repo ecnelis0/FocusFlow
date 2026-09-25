@@ -67,6 +67,9 @@ export interface Concept extends ConceptSummary {
    *  everything filed before there was one — `lib/motif.ts` matches those from
    *  their own words. */
   motif: string | null;
+  /** The card this concept is revised from. Null for one filed before there
+   *  were cards; the page offers to write it. */
+  card: ConceptCard | null;
   /** Where it was dragged on the map, or null while the layout decides. Both or
    *  neither: half a position reads as a 0 on the other axis. */
   map_x: number | null;
@@ -284,4 +287,20 @@ export interface ChatReply {
   filter_description: string;
   mistakes: Mistake[];
   error: string | null;
+}
+
+/** One concept in the shape it is revised from. Mirrors
+ *  `backend/app/analysis/card.py`; change them together.
+ *
+ *  Everything but the takeaway is optional, and a missing part is dropped rather
+ *  than drawn empty — a card with three strong sections reads better than one
+ *  with seven, four of which say nothing. */
+export interface ConceptCard {
+  takeaway: string;
+  keyword: string | null;
+  exam_cue: string | null;
+  mental_model: string | null;
+  figure: NoteFigure | null;
+  trap: string | null;
+  hook: string | null;
 }

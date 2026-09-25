@@ -85,6 +85,9 @@ class ProposedConcept(BaseModel):
     when: str | None = None
     # Which scene the map draws for it.
     motif: str | None = None
+    # The revision card, as the reading wrote it. Sent out and back untouched:
+    # nothing on the approval page edits it yet.
+    card: dict | None = None
     # Where in the notes it came from ("page 3"), when the model could tell.
     where: str | None
     # The existing concept the model says this is, if any. The student can drop it.
@@ -131,6 +134,7 @@ class ApprovedConcept(BaseModel):
     # title into something the model's pick no longer suits, and the picker in
     # the client is what they were looking at when they approved.
     motif: str | None = Field(default=None, max_length=32)
+    card: dict | None = None
     existing_id: str | None = None
 
 
@@ -346,6 +350,11 @@ async def _file(
                 target.when_label = " ".join(found.when.split())[:60] or None
             if target.motif is None and found.motif:
                 target.motif = found.motif
+            # Same rule as the rest: an existing concept keeps the card it was
+            # given. A later video mentioning it in passing must not overwrite
+            # the card written from the notes it actually came from.
+            if target.card is None and found.card:
+                target.card = found.card
             target.updated_at = utcnow()
             action = "updated"
         else:
@@ -361,6 +370,7 @@ async def _file(
                 sequence=found.order or None,
                 when_label=" ".join((found.when or "").split())[:60] or None,
                 motif=found.motif,
+                card=found.card,
             )
             target.mistakes = []
             target.images = []
@@ -490,6 +500,7 @@ def _propose(extraction: CaptureExtraction, existing: list[Concept]) -> list[Pro
                 order=found.order,
                 when=" ".join((found.when or "").split())[:60] or None,
                 motif=found.motif,
+                card=found.card.model_dump() if found.card else None,
                 where=found.where,
                 existing_id=match.id if match else None,
                 existing_title=match.title if match else None,

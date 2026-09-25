@@ -232,6 +232,9 @@ class ConceptRead(BaseModel):
     # The scene the map draws for it. Null for anything filed before the
     # extractor was asked to pick one; the client matches those from their words.
     motif: str | None = None
+    # The revision card, as written. Null for a concept filed before there were
+    # cards, or one whose writing failed; the page offers to write one.
+    card: dict | None = None
     # Null until the student drags it; the map computes a place for it until then.
     map_x: float | None = None
     map_y: float | None = None

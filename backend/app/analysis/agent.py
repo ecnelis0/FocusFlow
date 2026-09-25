@@ -25,6 +25,7 @@ from pydantic import BaseModel, ValidationError
 
 from ..query import BankQuery, Vocabulary
 from .base import AnalysisFailed
+from .card import CARD_PROMPT, CardInput, ConceptCard
 from .claude import INTERPRET_PROMPT, SUMMARISE_PROMPT, summarise_prompt
 from .extract import _TEXT_LABELS, EXTRACT_PROMPT, CaptureExtraction, CaptureInput, _tail
 from .notes import NOTES_PROMPT, NoteDocument, NoteInput
@@ -277,4 +278,21 @@ class AgentNoteWriter:
             system=NOTES_PROMPT,
             model=self._model,
             schema=NoteDocument,
+        )
+
+
+class AgentCardWriter:
+    """One concept's card, through the Claude Agent SDK. Same seam as the rest."""
+
+    name = "agent"
+
+    def __init__(self, model: str) -> None:
+        self._model = model
+
+    async def write(self, concept: CardInput) -> ConceptCard:
+        return await _run(
+            prompt=concept.render(),
+            system=CARD_PROMPT,
+            model=self._model,
+            schema=ConceptCard,
         )

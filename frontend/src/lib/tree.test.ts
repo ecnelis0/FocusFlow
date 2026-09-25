@@ -22,6 +22,7 @@ function concept(
     sequence,
     when_label,
     motif: null,
+    card: null,
     map_x: null,
     map_y: null,
     question_count: 0,

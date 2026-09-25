@@ -170,6 +170,11 @@ export const api = {
 
   getConcept: (id: string) => request<ConceptDetail>(`/concepts/${id}`),
 
+  /** Write the revision card for a concept that has none. `force` rewrites one
+   *  that exists, which the page asks about first. */
+  writeConceptCard: (id: string, force = false) =>
+    request<ConceptDetail>(`/concepts/${id}/card?force=${force}`, { method: "POST" }),
+
   createConcept: (draft: ConceptDraft) =>
     request<Concept>("/concepts", { method: "POST", body: JSON.stringify(draft) }),
 

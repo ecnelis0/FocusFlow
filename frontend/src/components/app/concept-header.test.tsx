@@ -17,6 +17,7 @@ function concept(overrides: Partial<ConceptDetail> = {}): ConceptDetail {
   sequence: null,
   when_label: null,
   motif: null,
+  card: null,
   map_x: null,
   map_y: null,
     created_at: new Date().toISOString(),

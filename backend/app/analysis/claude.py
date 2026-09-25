@@ -14,6 +14,7 @@ import httpx2
 
 from ..query import BankQuery, Vocabulary
 from .base import AnalysisFailed
+from .card import CARD_PROMPT, CardInput, ConceptCard
 from .notes import NOTES_PROMPT, NoteDocument, NoteInput
 
 if TYPE_CHECKING:
@@ -254,4 +255,41 @@ class ClaudeNoteWriter:
         parsed = response.parsed_output
         if parsed is None:
             raise AnalysisFailed("the model did not return notes that validated")
+        return parsed
+
+
+class ClaudeCardWriter:
+    """One concept's card, through the same structured-output plumbing."""
+
+    name = "claude"
+
+    def __init__(
+        self,
+        api_key: str | None,
+        model: str,
+        http_client: httpx2.AsyncClient | None = None,
+        base_url: str | None = None,
+    ) -> None:
+        self._client = anthropic.AsyncAnthropic(
+            api_key=api_key,
+            **({"http_client": http_client} if http_client else {}),
+            **({"base_url": base_url} if base_url else {}),
+        )
+        self._model = model
+
+    async def write(self, concept: CardInput) -> ConceptCard:
+        try:
+            response = await self._client.messages.parse(
+                model=self._model,
+                max_tokens=4096,
+                system=CARD_PROMPT,
+                thinking={"type": "adaptive"},
+                messages=[{"role": "user", "content": concept.render()}],
+                output_config={"format": ConceptCard},
+            )
+        except Exception as exc:  # noqa: BLE001 - the SDK raises a family of these
+            raise AnalysisFailed(f"the card call failed ({exc})") from exc
+        parsed = response.parsed_output
+        if parsed is None:
+            raise AnalysisFailed("the model did not return a card that validated")
         return parsed

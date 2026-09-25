@@ -178,6 +178,10 @@ class Concept(Base):
     # from their own words in the client, which is good enough for decoration
     # and costs nothing to run.
     motif: Mapped[str | None] = mapped_column(String(32), default=None)
+    # The revision card: takeaway, keyword, exam cue, mental model, figure, trap,
+    # hook. JSON rather than seven columns because it is written and read as one
+    # object, always, and every part of it is optional.
+    card: Mapped[dict | None] = mapped_column(JSON, default=None)
     # Where this sits in the order the material runs: chronological for history,
     # procedural for a method, foundations-first otherwise. Numbered among siblings
     # - branches against branches, details against the details of their own branch -

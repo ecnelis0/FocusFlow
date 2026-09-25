@@ -8,6 +8,8 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
+from ..analysis.base import AnalysisFailed
+from ..analysis.card import CardInput, get_card_writer
 from ..config import get_settings
 from ..deps import SessionDep, UserDep
 from ..filing import UnknownFolder, ensure_subject, file_into, resolve_folder
@@ -16,6 +18,7 @@ from ..images import delete as delete_file
 from ..models import (
     Concept,
     ConceptImage,
+    Folder,
     Mistake,
     concept_mistakes,
     concept_options,
@@ -55,6 +58,8 @@ def _read(concept: Concept) -> ConceptRead:
         parent_id=concept.parent_id,
         sequence=concept.sequence,
         when_label=concept.when_label,
+        motif=concept.motif,
+        card=concept.card,
         map_x=concept.map_x,
         map_y=concept.map_y,
         question_count=len(concept.mistakes),
@@ -120,6 +125,8 @@ async def list_concepts(session: SessionDep, user_id: UserDep) -> list[ConceptRe
             parent_id=concept.parent_id,
             sequence=concept.sequence,
             when_label=concept.when_label,
+            motif=concept.motif,
+            card=concept.card,
             map_x=concept.map_x,
             map_y=concept.map_y,
             question_count=counts.get(concept.id, 0),
@@ -277,6 +284,73 @@ async def delete_concept_image(
     concept.images.remove(image)
     await session.commit()
     delete_file(filename, get_settings().upload_root)
+
+    concept = await _load(session, user_id, concept_id, with_mistakes=True)
+    return ConceptDetail(**_read(concept).model_dump(), mistakes=concept.mistakes)
+
+
+@router.post("/{concept_id}/card", response_model=ConceptDetail)
+async def write_card(
+    concept_id: str,
+    session: SessionDep,
+    user_id: UserDep,
+    force: bool = False,
+) -> ConceptDetail:
+    """Write the revision card for a concept that has none.
+
+    Concepts filed from now on arrive with one — the reading writes it while it
+    has the whole material in front of it, which is the best moment to decide
+    what the one line is. This is for everything filed before that, and for the
+    concept you have since rewritten by hand.
+
+    Kept once written. A card that comes back different every time it is looked
+    at is one you cannot learn from, so rewriting is deliberate: `force=true`,
+    from a button that says what it will do.
+
+    The source is the concept's own body and the questions already filed under
+    it. The questions matter more than they look: they are the evidence of how
+    this concept actually gets asked, which is exactly what the exam cue and the
+    trap are trying to name.
+    """
+    concept = await _load(session, user_id, concept_id, with_mistakes=True)
+
+    if concept.card is not None and not force:
+        raise HTTPException(
+            status_code=409,
+            detail="This concept already has a card. Send force=true to write it again.",
+        )
+
+    # Asked for by id rather than walked to through `concept.folder`. `_load`
+    # with mistakes does not eager-load the folder, and touching an unloaded
+    # relationship at this point raises MissingGreenlet — at the line that reads
+    # it, not at the line that forgot to load it.
+    folder_name = (
+        await session.scalar(select(Folder.name).where(Folder.id == concept.folder_id))
+        if concept.folder_id
+        else None
+    )
+    writer = get_card_writer()
+    try:
+        card = await writer.write(
+            CardInput(
+                title=concept.title,
+                body=concept.body or "",
+                subject=concept.subject,
+                unit=folder_name,
+                questions=[
+                    f"- {m.question_text} (answer: {m.correct_answer})"
+                    for m in concept.mistakes[:12]
+                ],
+            )
+        )
+    except AnalysisFailed as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - one bad card must not 500 the page
+        raise HTTPException(status_code=503, detail=f"{type(exc).__name__}: {exc}") from exc
+
+    concept.card = card.model_dump()
+    concept.updated_at = utcnow()
+    await session.commit()
 
     concept = await _load(session, user_id, concept_id, with_mistakes=True)
     return ConceptDetail(**_read(concept).model_dump(), mistakes=concept.mistakes)

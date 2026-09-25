@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..config import get_settings
 from .base import AnalysisFailed
+from .card import ConceptCard
 
 CaptureKind = Literal["image", "pdf", "text", "audio", "video"]
 
@@ -70,6 +71,13 @@ class ExtractedConcept(BaseModel):
         description="The concept in two to six sentences, written for the student to "
         "revise from later: what it is, the trap it sets, and how to apply it. Keep the "
         "student's own examples and phrasing where they exist."
+    )
+    card: ConceptCard | None = Field(
+        default=None,
+        description="The card this concept is revised from: its one-line takeaway, the "
+        "keyword it turns on, the phrasing an exam uses for it, the picture to think with, "
+        "the mistake it is built to catch, and a line short enough to still be there "
+        "tomorrow. Fill it for every concept - it is the part the student actually reads.",
     )
     motif: Motif | None = Field(
         default=None,
@@ -344,6 +352,15 @@ often poses none: then write one or two short practice questions per concept you
 with answers, and mark them origin="generated" - the student sees that label, so be \
 honest about it. A generated question must be answerable in one line and checkable \
 against a single correct answer.
+
+**Every concept gets a card.** The body is the full note; the card is what gets \
+revised from the night before, and it is not a summary of the body - it is a \
+different set of claims. One line that *is* the concept, the single word it turns \
+on, the phrasing an exam wears when it is really asking this, a picture to think \
+with, the neighbouring idea it gets confused with, and a hook short enough to \
+survive until morning. Leave any part null rather than padding it; an empty \
+section costs nothing and a limp one costs trust in the whole card. A figure only \
+where the concept really is a table, a sequence or a set of parts.
 
 **The student may tell you how they want this read.** When the turn carries a block \
 headed "How the student wants this read", read it before anything else and follow it. \
