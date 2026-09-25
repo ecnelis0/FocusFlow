@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 
@@ -127,8 +127,24 @@ function useRecorder(onDone: (file: File) => void) {
   const [seconds, setSeconds] = useState(0);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
-  const supported =
-    typeof window !== "undefined" && recordingMimeType() !== null;
+  // Assumed until the browser can be asked. `typeof window !== "undefined"`
+  // here is the exact branch React's hydration error names: the server decides
+  // "no microphone", the browser decides "microphone", and the two renders
+  // disagree — so React throws the tree away and builds it again.
+  //
+  // Optimistic rather than pessimistic, because the two are not symmetrical.
+  // Starting from "supported" renders the button on the server and the same
+  // button on the client's first pass, and only the rare browser that cannot
+  // record sees anything change. Starting from "unsupported" would flash
+  // "this browser cannot record" at everyone else. `start` already bails when
+  // there is no usable mime type, so the button is harmless while unproven.
+  const supported = useSyncExternalStore(
+    // Nothing to subscribe to: whether this browser can record does not change
+    // while the page is open.
+    () => () => {},
+    () => recordingMimeType() !== null,
+    () => true,
+  );
 
   useEffect(() => {
     if (!recording) return;
@@ -188,6 +204,11 @@ interface Draft2 {
 
 const EMPTY_DRAFT: Draft2 = { text: "", url: "", subject: "", folderId: null };
 
+/** Reads the kept draft. Only ever called from an effect: reading storage while
+ *  rendering gives the server one answer and the browser another, and React
+ *  answers that by throwing the whole tree away and rendering it again — which
+ *  it reports as "Hydration failed", and which the student sees as the page
+ *  flickering on arrival. */
 function restored(): Draft2 {
   if (typeof window === "undefined") return EMPTY_DRAFT;
   try {
@@ -199,9 +220,14 @@ function restored(): Draft2 {
   }
 }
 
-function useDraft({ text, url, subject, folderId }: Draft2) {
+function useDraft({ text, url, subject, folderId }: Draft2, ready: boolean) {
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    // Nothing is written until the kept draft has been read back. The restore
+    // effect above runs first and sets the state, but this effect is in the
+    // same commit and still closes over the empty values — so without the
+    // guard it deletes the stored draft and only writes it back on the next
+    // pass. Navigate away in between and it is gone for good.
+    if (!ready || typeof window === "undefined") return;
     const empty = !text.trim() && !url.trim() && !subject.trim() && !folderId;
     try {
       if (empty) window.sessionStorage.removeItem(DRAFT_KEY);
@@ -213,24 +239,40 @@ function useDraft({ text, url, subject, folderId }: Draft2) {
     } catch {
       // Private mode, or a full quota. Losing the draft is the old behaviour.
     }
-  }, [text, url, subject, folderId]);
+  }, [ready, text, url, subject, folderId]);
 }
 
 export function CaptureForm() {
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
-  const [text, setText] = useState(() => restored().text);
-  const [url, setUrl] = useState(() => restored().url);
-  const [subject, setSubject] = useState(() => restored().subject);
+  const [text, setText] = useState("");
+  const [url, setUrl] = useState("");
+  const [subject, setSubject] = useState("");
   // Chosen before the material is read: it steers the reading, and it is where
   // everything approved from this capture is filed.
-  const [folderId, setFolderId] = useState<string | null>(() => restored().folderId);
+  const [folderId, setFolderId] = useState<string | null>(null);
+  // Empty on the first pass, filled immediately after mount, which is the only
+  // point at which the browser's storage may be read.
+  const [draftRead, setDraftRead] = useState(false);
 
   // Kept across a navigation. Pasting a link and then glancing at the bank used
   // to throw the link away, which is the one thing a page you paste into must
   // not do. The file is deliberately not kept - a File cannot be serialised, and
   // pretending one had survived would be worse than plainly losing it.
-  useDraft({ text, url, subject, folderId });
+  // Restoring browser-only state after hydration is the one thing an effect
+  // that calls setState is actually for: the value cannot be read while
+  // rendering (that is the bug above), and it has to become editable state
+  // rather than a derived value, because the student types over it.
+  useEffect(() => {
+    const draft = restored();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setText(draft.text);
+    setUrl(draft.url);
+    setSubject(draft.subject);
+    setFolderId(draft.folderId);
+    setDraftRead(true);
+  }, []);
+  useDraft({ text, url, subject, folderId }, draftRead);
   // Three stages: the form, the proposal being edited, and what was filed.
   const [proposal, setProposal] = useState<CaptureProposal | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);

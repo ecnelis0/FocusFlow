@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { Cat } from "@/components/app/cat";
 import { SidePanelToggle } from "@/components/app/side-panel";
 import { cn } from "@/lib/utils";
 
@@ -48,19 +49,23 @@ export function Nav() {
       {/* Wide screens: the sidebar. */}
       <aside
         aria-label="Main"
-        className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r bg-background lg:flex"
+        className="surface fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r lg:flex"
       >
         <Link href="/" className="px-5 py-5 text-base font-bold tracking-tight">
           Focus<span className="text-muted-foreground">Flow</span>
         </Link>
         <nav className="flex flex-1 flex-col gap-0.5 px-3">{links("vertical")}</nav>
+        {/* The house cat, asleep at the bottom of the sidebar where there is
+            nothing else to put. Fixed pose: this one is furniture, and
+            furniture that moves is unsettling. */}
+        <Cat pose="curl" coat="ginger" width={78} className="mx-auto mb-1 opacity-80" />
         <div className="border-t px-3 py-3">
           <SidePanelToggle />
         </div>
       </aside>
 
       {/* Narrow screens: the top bar. */}
-      <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur lg:hidden">
+      <header className="surface sticky top-0 z-30 border-b lg:hidden">
         <nav className="flex h-14 items-center gap-1 overflow-x-auto px-4">
           <Link href="/" className="mr-3 shrink-0 font-bold tracking-tight">
             Focus<span className="text-muted-foreground">Flow</span>

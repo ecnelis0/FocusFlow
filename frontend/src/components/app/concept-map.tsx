@@ -216,8 +216,11 @@ export function ConceptMap({ concepts }: { concepts: Concept[] }) {
     return { nodes, edges };
   }, [concepts, renameConcept]);
 
+  // The canvas gets its own silk. Everywhere else the painting behind the page
+  // is pleasant; here it runs underneath a graph of small pale cards and the two
+  // fight, so this one surface is close to opaque.
   return (
-    <div className="h-[38rem] w-full overflow-hidden rounded-xl border bg-muted/20">
+    <div className="h-[38rem] w-full overflow-hidden rounded-xl border bg-card/95">
       <ReactFlow
         nodes={nodes}
         edges={edges}

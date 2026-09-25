@@ -46,7 +46,16 @@ export function MainArea({ children }: { children: React.ReactNode }) {
   return (
     <main
       className={cn(
-        "mx-auto max-w-5xl px-4 py-8 transition-[margin] duration-200",
+        // The scroll: a sheet of silk laid over the painting, which is how a
+        // hanging scroll is mounted and, more to the point, the only way text
+        // is guaranteed to be readable wherever it lands. The landscape puts
+        // its deep greens in the margins and along the floor — outside this
+        // sheet on a wide screen — and what shows through the sheet itself is
+        // the pale middle of the picture, blurred the way silk blurs what is
+        // behind it.
+        "mx-auto my-6 max-w-5xl rounded-2xl bg-background/74 px-5 py-8 ring-1 ring-foreground/5",
+        "shadow-[0_2px_40px_rgba(28,46,36,0.08)] backdrop-blur-[3px] sm:px-8",
+        "transition-[margin] duration-200",
         open && "lg:mr-[26rem]",
       )}
     >
@@ -76,7 +85,7 @@ export function SidePanel({ children }: { children: React.ReactNode }) {
         id="side-panel"
         aria-label="Ask the bank"
         className={cn(
-          "fixed top-14 right-0 bottom-0 z-50 w-full max-w-md border-l bg-background",
+          "surface fixed top-14 right-0 bottom-0 z-50 w-full max-w-md border-l",
           "overflow-y-auto p-5 shadow-lg sm:w-[26rem]",
         )}
       >

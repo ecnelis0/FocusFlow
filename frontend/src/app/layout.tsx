@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Roboto, Roboto_Mono } from "next/font/google";
 
 import { Assistant } from "@/components/app/assistant";
+import { Landscape } from "@/components/app/landscape";
 import { Nav } from "@/components/app/nav";
 import { MainArea, SidePanelProvider } from "@/components/app/side-panel";
 import { Providers } from "@/components/providers";
@@ -28,6 +29,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${roboto.variable} ${robotoMono.variable} antialiased`}>
+        {/* The painting goes in before anything else and never moves: it is
+            fixed, so the app scrolls over a still landscape rather than
+            dragging one along behind it. */}
+        <Landscape />
         <Providers>
           <SidePanelProvider>
             <Nav />

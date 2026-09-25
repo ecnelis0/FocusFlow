@@ -10,6 +10,20 @@
   --font-sans: var(--font-roboto), system-ui, sans-serif;
   --font-mono: var(--font-roboto-mono), ui-monospace, monospace;
   --font-heading: var(--font-roboto), system-ui, sans-serif;
+
+  /* The painting's own pigments, nameable in markup. Mineral colours ground
+     into a binder, which is what qinglü landscapes were actually painted with:
+     malachite for the near rock, azurite-tinted sage for the far peaks,
+     cinnabar for the seal, gold for the pavilion roof. */
+  --color-ink: var(--ink);
+  --color-jade: var(--jade);
+  --color-malachite: var(--malachite);
+  --color-sage: var(--sage);
+  --color-mist: var(--mist);
+  --color-silk: var(--silk);
+  --color-ochre: var(--ochre);
+  --color-cinnabar: var(--cinnabar);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,77 +63,105 @@
 }
 
 :root {
-  /* FocusFlow palette. Names mirror the Figma "Colour" collection one-for-one
-     (bg/page, text/secondary, accent/base …) so the two cannot quietly drift.
-     Warm paper rather than pure white: this is a study notebook, and hours of
-     staring at it should not feel like staring at a spreadsheet. */
-  --background: oklch(0.986 0.003 85);      /* bg/page    #FBFAF9 */
-  --foreground: oklch(0.198 0.006 60);      /* text/primary #1A1917 */
-  --card: oklch(1 0 0);                     /* bg/surface #FFFFFF */
-  --card-foreground: oklch(0.198 0.006 60);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.198 0.006 60);
-  --primary: oklch(0.386 0.144 283);        /* accent/base #3F3D9E */
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.958 0.005 80);       /* bg/sunken  #F4F2F0 */
-  --secondary-foreground: oklch(0.30 0.01 70);
-  --muted: oklch(0.958 0.005 80);
-  --muted-foreground: oklch(0.505 0.010 70); /* text/secondary #6B6862 */
-  --accent: oklch(0.949 0.017 285);          /* accent/soft #EEEDFB */
-  --accent-foreground: oklch(0.386 0.144 283);
-  --destructive: oklch(0.505 0.187 27);      /* urgency/fundamental #B3261E */
-  --border: oklch(0.930 0.006 75);           /* border/subtle #E9E6E2 */
-  --input: oklch(0.930 0.006 75);
-  --ring: oklch(0.386 0.144 283 / 45%);
-  --radius: 0.75rem;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* FocusFlow reads as a qinglü shanshui — a blue-green landscape painted on
+     aged silk. Not one green: the range from far sage to near malachite is what
+     makes it a painting rather than a wash, and the app borrows that range for
+     its own depth. Deep jade is the acting colour, cinnabar is the seal (and so
+     the only red), and the paper underneath everything is silk, not white.
+
+     Every token below still carries its shadcn name, so the whole component set
+     follows the repaint without a single component knowing about it. */
+  --ink: oklch(0.285 0.020 75);             /* contour ink   #40372C */
+  --jade: oklch(0.478 0.098 158);           /* deep rock     #2F7355 */
+  --malachite: oklch(0.680 0.130 152);      /* lit rock face #63B07E */
+  --sage: oklch(0.845 0.055 145);           /* far peaks     #BEDCC0 */
+  --mist: oklch(0.945 0.020 120);           /* cloud between ridges  */
+  --silk: oklch(0.962 0.018 92);            /* the ground    #F5EFDE */
+  --ochre: oklch(0.760 0.105 78);           /* roof gold, rim light  */
+  --cinnabar: oklch(0.545 0.170 32);        /* the seal      #B14A2E */
+
+  --background: var(--silk);
+  --foreground: var(--ink);
+  /* Cards are silk held a shade above the ground and slightly translucent, so
+     the ridges behind them stay faintly legible instead of being punched out.
+     Anything holding a paragraph gets `bg-card`, so this one value decides how
+     much painting shows through the whole app. */
+  --card: oklch(0.985 0.010 92 / 92%);
+  --card-foreground: var(--ink);
+  --popover: oklch(0.988 0.008 92);
+  --popover-foreground: var(--ink);
+  --primary: var(--jade);
+  --primary-foreground: oklch(0.985 0.012 92);
+  --secondary: oklch(0.930 0.032 148);      /* a green wash, not a grey one */
+  --secondary-foreground: oklch(0.360 0.070 158);
+  --muted: oklch(0.938 0.022 120);
+  --muted-foreground: oklch(0.505 0.028 130);
+  --accent: oklch(0.912 0.052 152);
+  --accent-foreground: oklch(0.360 0.070 158);
+  --destructive: var(--cinnabar);
+  --border: oklch(0.882 0.024 128);
+  --input: oklch(0.882 0.024 128);
+  --ring: oklch(0.478 0.098 158 / 45%);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Charts read left to right as distance into the painting: near rock first. */
+  --chart-1: oklch(0.478 0.098 158);
+  --chart-2: oklch(0.680 0.130 152);
+  --chart-3: oklch(0.760 0.105 78);
+  --chart-4: oklch(0.845 0.055 145);
+  --chart-5: oklch(0.545 0.170 32);
+  --sidebar: oklch(0.962 0.018 92 / 72%);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--jade);
+  --sidebar-primary-foreground: oklch(0.985 0.012 92);
+  --sidebar-accent: oklch(0.912 0.052 152);
+  --sidebar-accent-foreground: oklch(0.360 0.070 158);
+  --sidebar-border: oklch(0.882 0.024 128);
+  --sidebar-ring: oklch(0.478 0.098 158 / 45%);
 }
 
 .dark {
-  --background: oklch(0.176 0.005 285);
-  --foreground: oklch(0.960 0.003 80);
-  --card: oklch(0.216 0.006 285);
-  --card-foreground: oklch(0.960 0.003 80);
-  --popover: oklch(0.216 0.006 285);
-  --popover-foreground: oklch(0.960 0.003 80);
-  --primary: oklch(0.688 0.148 285);
-  --primary-foreground: oklch(0.150 0.010 285);
-  --secondary: oklch(0.262 0.006 285);
-  --secondary-foreground: oklch(0.960 0.003 80);
-  --muted: oklch(0.262 0.006 285);
-  --muted-foreground: oklch(0.660 0.008 80);
-  --accent: oklch(0.290 0.045 285);
-  --accent-foreground: oklch(0.820 0.100 285);
-  --destructive: oklch(0.700 0.150 25);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.688 0.148 285 / 50%);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* The same valley after dark: the silk goes to wet ink, the rock keeps its
+     mineral green, and the pavilion lamp is the one warm thing left. */
+  --ink: oklch(0.945 0.015 100);
+  --jade: oklch(0.720 0.110 155);
+  --malachite: oklch(0.600 0.110 152);
+  --sage: oklch(0.420 0.055 150);
+  --mist: oklch(0.320 0.022 160);
+  --silk: oklch(0.205 0.020 160);
+  --ochre: oklch(0.780 0.110 78);
+  --cinnabar: oklch(0.640 0.160 32);
+
+  --background: var(--silk);
+  --foreground: var(--ink);
+  --card: oklch(0.245 0.022 160 / 88%);
+  --card-foreground: var(--ink);
+  --popover: oklch(0.252 0.022 160);
+  --popover-foreground: var(--ink);
+  --primary: var(--jade);
+  --primary-foreground: oklch(0.180 0.025 160);
+  --secondary: oklch(0.290 0.028 158);
+  --secondary-foreground: oklch(0.945 0.015 100);
+  --muted: oklch(0.290 0.024 160);
+  --muted-foreground: oklch(0.705 0.022 130);
+  --accent: oklch(0.330 0.048 155);
+  --accent-foreground: oklch(0.845 0.075 152);
+  --destructive: var(--cinnabar);
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 18%);
+  --ring: oklch(0.720 0.110 155 / 50%);
+  --chart-1: oklch(0.720 0.110 155);
+  --chart-2: oklch(0.600 0.110 152);
+  --chart-3: oklch(0.780 0.110 78);
+  --chart-4: oklch(0.420 0.055 150);
+  --chart-5: oklch(0.640 0.160 32);
+  --sidebar: oklch(0.205 0.020 160 / 72%);
+  --sidebar-foreground: oklch(0.945 0.015 100);
+  --sidebar-primary: oklch(0.720 0.110 155);
+  --sidebar-primary-foreground: oklch(0.180 0.025 160);
+  --sidebar-accent: oklch(0.330 0.048 155);
+  --sidebar-accent-foreground: oklch(0.845 0.075 152);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.720 0.110 155 / 50%);
 }
 
 @layer base {
@@ -144,4 +186,14 @@
   html {
     @apply font-sans;
   }
+}
+
+@utility surface {
+  /* What a panel sitting directly on the painting needs: silk, a hairline, and
+     enough blur behind it that the ridges read as *behind* rather than through.
+     Used by the nav and the side panel — the two fixed surfaces the landscape
+     runs underneath. */
+  background-color: color-mix(in oklab, var(--background) 82%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  backdrop-filter: blur(10px) saturate(1.15);
 }
