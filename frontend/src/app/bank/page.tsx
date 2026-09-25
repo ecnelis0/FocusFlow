@@ -12,7 +12,9 @@ import { MaterialList } from "@/components/app/material-list";
 import { MistakeCard } from "@/components/app/mistake-card";
 import { PageHeader } from "@/components/app/page-header";
 import { Section } from "@/components/app/section";
+import { SubjectCards } from "@/components/app/subject-cards";
 import { SubjectTabs } from "@/components/app/subject-tabs";
+import { UnitOutline } from "@/components/app/unit-outline";
 import { Unreachable } from "@/components/app/unreachable";
 import { useSubjectTree } from "@/components/app/use-subjects";
 import { Button } from "@/components/ui/button";
@@ -239,6 +241,27 @@ function BankList() {
 
       {/* The way in, above whatever is already filed. */}
       <BuildBase />
+
+      {/* What you are carrying, before what you last put in. With no course
+          chosen that is the courses themselves; inside one it is the units and
+          what is filed in each. Both disappear once a unit is open, because at
+          that point the page is about that unit's materials. */}
+      {!searching && !openFolder && (
+        <Section
+          title={openSubject ? `Inside ${openSubject.name}` : "Your courses"}
+          description={
+            openSubject
+              ? "Every unit, and the concepts filed in it. Open one to see them."
+              : "Each course, with what it holds. Open one to see its units."
+          }
+        >
+          {openSubject ? (
+            <UnitOutline subject={openSubject} />
+          ) : (
+            <SubjectCards subjects={subjects ?? []} onOpen={selectSubject} />
+          )}
+        </Section>
+      )}
 
       {/* One concept selected: show the concept, then the questions under it. */}
       {selected.concept_ids.length === 1 && (
