@@ -41,6 +41,11 @@ class CaptureInput(BaseModel):
     data: bytes | None = None
     # Optional steer from the student: "this is from my chemistry notes".
     subject_hint: str | None = None
+    # The student's own standing instructions for how to read any material:
+    # how broad the concepts should be, how long, in what voice, what to skip.
+    # Read before the material is turned into anything, and allowed to override
+    # the house style in the system prompt.
+    instructions: str | None = None
     existing: list[ExistingConcept] = Field(default_factory=list)
 
 
@@ -315,7 +320,25 @@ exercises, so it can be filed under that concept and come back for review. A lec
 often poses none: then write one or two short practice questions per concept yourself, \
 with answers, and mark them origin="generated" - the student sees that label, so be \
 honest about it. A generated question must be answerable in one line and checkable \
-against a single correct answer.\
+against a single correct answer.
+
+**The student may tell you how they want this read.** When the turn carries a block \
+headed "How the student wants this read", read it before anything else and follow it. \
+It is their bank and their revision, and it outranks the house style above wherever the \
+two disagree: how broad or how fine the concepts are, how long the bodies run, what \
+voice to write in, what vocabulary to keep, what to leave out entirely, whether to \
+write questions at all and how hard they should be.
+
+Four things it cannot change, because the app breaks rather than bends: the two levels, \
+because the result is drawn as a map; an `order` on every concept, because the map draws \
+arrows with it; titles that are recallable rules rather than bare topics; and the rule \
+against inventing material the notes do not contain. If their instructions ask for \
+something those four forbid, follow the instruction as far as it will go and say what \
+you could not do in `summary`, in one sentence.
+
+An instruction that asks for something about the *material* rather than the format - \
+"only the parts about photosynthesis", "skip the worked examples" - is a filter, and \
+filtering is allowed: leave that material out rather than reshaping it.\
 """
 
 
@@ -326,11 +349,49 @@ _TEXT_LABELS = {
 }
 
 
+def _instruction_block(capture: CaptureInput) -> str | None:
+    """The student's own instructions, quoted and named as theirs.
+
+    Fenced and labelled rather than pasted in loose: what arrives here is typed
+    by a student into a box, and the model has to be able to tell where their
+    wishes end and the material begins.
+    """
+    text = (capture.instructions or "").strip()
+    if not text:
+        return None
+    return (
+        "How the student wants this read — their words, and they take precedence "
+        "over the house style:\n<instructions>\n" + text + "\n</instructions>"
+    )
+
+
 def _existing_block(capture: CaptureInput) -> str:
     if not capture.existing:
         return "Concepts already in the bank: (none yet)"
     lines = [f"- {c.title}" + (f" [{c.subject}]" if c.subject else "") for c in capture.existing]
     return "Concepts already in the bank:\n" + "\n".join(lines)
+
+
+def _tail(capture: CaptureInput) -> str:
+    """Everything that follows the material: what is already filed, the steers,
+    and the order to go ahead.
+
+    One function because there are two adapters, and an instruction that reached
+    only one of them would be a setting that works or does not depending on a
+    provider the student cannot see.
+    """
+    parts = [_existing_block(capture)]
+    if capture.subject_hint:
+        parts.append(f"The student says these notes are about: {capture.subject_hint}")
+    block = _instruction_block(capture)
+    if block:
+        parts.append(block)
+    parts.append(
+        "Read their instructions first if they gave any, then extract the concepts."
+        if block
+        else "Extract the concepts."
+    )
+    return "\n\n".join(parts)
 
 
 def _content(capture: CaptureInput) -> list[dict]:
@@ -350,11 +411,7 @@ def _content(capture: CaptureInput) -> list[dict]:
         label = _TEXT_LABELS.get(capture.kind, "The notes")
         blocks.append({"type": "text", "text": f"{label}:\n{capture.text or ''}"})
 
-    instructions = [_existing_block(capture)]
-    if capture.subject_hint:
-        instructions.append(f"The student says these notes are about: {capture.subject_hint}")
-    instructions.append("Extract the concepts.")
-    blocks.append({"type": "text", "text": "\n\n".join(instructions)})
+    blocks.append({"type": "text", "text": _tail(capture)})
     return blocks
 
 

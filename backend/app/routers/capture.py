@@ -497,6 +497,7 @@ async def capture(
     subject: Annotated[str | None, Form()] = None,
     url: Annotated[str | None, Form()] = None,
     folder_id: Annotated[str | None, Form()] = None,
+    instructions: Annotated[str | None, Form()] = None,
 ) -> CaptureProposal:
     """Scan notes (picture, PDF, text, or a recording) and propose concepts.
 
@@ -504,6 +505,13 @@ async def capture(
     `folder_id` is the topic folder this is being filed into - a stronger steer,
     because its subject is a course the student has actually set up. Nothing is
     written here; the same folder id goes to `/capture/commit`, which files it.
+
+    `instructions` is the student's own brief for how to read any material -
+    "keep concepts broad", "write the bodies in plain language", "skip anything
+    that is not examinable". It is read before the material is turned into
+    concepts and outranks the default house style, which is the point of it:
+    the same PDF should be able to come back as six broad ideas or as thirty
+    fine ones depending on who is revising from it.
     """
     if file is None and not (text or "").strip() and not (url or "").strip():
         raise HTTPException(status_code=422, detail="Send a file, some text, or a YouTube link.")
@@ -551,6 +559,9 @@ async def capture(
         media_type=sniffed.media_type,
         data=data if sniffed.kind in ("image", "pdf") else None,
         subject_hint=hint or None,
+        # Capped rather than refused: a brief this long is a pasted essay, and
+        # truncating it still reads and files, where a 422 loses the upload.
+        instructions=(instructions or "").strip()[:2000] or None,
         existing=[ExistingConcept(id=c.id, title=c.title, subject=c.subject) for c in existing],
     )
 

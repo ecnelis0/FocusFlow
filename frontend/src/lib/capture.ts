@@ -120,6 +120,9 @@ export async function captureNotes(input: {
   /** The topic folder this is being filed into. A stronger steer than `subject`:
    *  its subject is a course the student has actually set up. */
   folderId?: string | null;
+  /** The student's standing brief for how any material should be read. Sent on
+   *  every capture, read before the material is turned into concepts. */
+  instructions?: string;
 }): Promise<CaptureProposal> {
   const body = new FormData();
   if (input.file) body.append("file", input.file, input.file.name);
@@ -127,6 +130,7 @@ export async function captureNotes(input: {
   if (input.url?.trim()) body.append("url", input.url.trim());
   if (input.subject?.trim()) body.append("subject", input.subject.trim());
   if (input.folderId) body.append("folder_id", input.folderId);
+  if (input.instructions?.trim()) body.append("instructions", input.instructions.trim());
 
   const response = await fetch(`${API_URL}/capture`, { method: "POST", body });
   if (!response.ok) throw await failure(response);

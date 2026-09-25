@@ -26,7 +26,7 @@ from pydantic import BaseModel, ValidationError
 from ..query import BankQuery, Vocabulary
 from .base import AnalysisFailed
 from .claude import INTERPRET_PROMPT, SUMMARISE_PROMPT, summarise_prompt
-from .extract import _TEXT_LABELS, EXTRACT_PROMPT, CaptureExtraction, CaptureInput, _existing_block
+from .extract import _TEXT_LABELS, EXTRACT_PROMPT, CaptureExtraction, CaptureInput, _tail
 from .notes import NOTES_PROMPT, NoteDocument, NoteInput
 from .scan import SCAN_PROMPT, ScanInput, ScannedQuestion
 
@@ -172,11 +172,7 @@ class AgentExtractor:
         self._mkdtemp = mkdtemp
 
     async def extract(self, capture: CaptureInput) -> CaptureExtraction:
-        instructions = [_existing_block(capture)]
-        if capture.subject_hint:
-            instructions.append(f"The student says these notes are about: {capture.subject_hint}")
-        instructions.append("Extract the concepts.")
-        tail = "\n\n".join(instructions)
+        tail = _tail(capture)
 
         if capture.kind in ("image", "pdf"):
             if capture.data is None or capture.media_type is None:

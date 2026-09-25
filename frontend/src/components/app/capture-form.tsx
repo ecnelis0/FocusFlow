@@ -194,6 +194,59 @@ function useRecorder(onDone: (file: File) => void) {
  *  it should not still be waiting a week later in another tab.
  */
 const DRAFT_KEY = "focusflow:study-draft";
+/** Local rather than session storage, and its own key rather than part of the
+ *  draft: how you want your notes read is a preference, not a half-finished
+ *  action. It should still be there next week, and it should survive filing the
+ *  material that was typed underneath it. */
+const BRIEF_KEY = "focusflow:reading-brief";
+
+/** One-click lines for the brief. Not a set of switches with fixed meanings:
+ *  each one drops its sentence into the box, where it can be edited, argued
+ *  with, or deleted like anything else typed there. The box is the setting; these
+ *  are only a way of not starting at a blank one. */
+const READY_MADE: ReadonlyArray<{ label: string; line: string }> = [
+  {
+    label: "Big ideas only",
+    line: "Keep the concepts broad — a handful of big ideas, not one per fact.",
+  },
+  {
+    label: "Fine detail",
+    line: "Go fine-grained: file every distinct rule, definition and distinction separately.",
+  },
+  {
+    label: "Only what is examinable",
+    line: "Only what could be examined. Leave out background, anecdotes and asides.",
+  },
+  {
+    label: "Plain language",
+    line: "Write the bodies in plain language a beginner could follow, and define the jargon.",
+  },
+  {
+    label: "Keep my wording",
+    line: "Keep my own wording and my own examples wherever the notes have them.",
+  },
+  {
+    label: "Harder questions",
+    line: "Write plenty of practice questions and make them harder than the material's own.",
+  },
+];
+
+/** Adds the line, or takes it back out if it is already there.
+ *
+ *  Exact-match both ways, so a line that has since been edited is left alone
+ *  rather than half-removed — the student's edit is worth more than the button's
+ *  idea of what it put there. */
+function toggleLine(brief: string, line: string): string {
+  const lines = brief.split("\n");
+  if (lines.some((existing) => existing.trim() === line)) {
+    return lines
+      .filter((existing) => existing.trim() !== line)
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+  return brief.trim() ? `${brief.trim()}\n${line}` : line;
+}
 
 interface Draft2 {
   text: string;
@@ -251,6 +304,9 @@ export function CaptureForm() {
   // Chosen before the material is read: it steers the reading, and it is where
   // everything approved from this capture is filed.
   const [folderId, setFolderId] = useState<string | null>(null);
+  // How this student wants any material read. Not part of the draft: it outlives
+  // the thing being uploaded.
+  const [brief, setBrief] = useState("");
   // Empty on the first pass, filled immediately after mount, which is the only
   // point at which the browser's storage may be read.
   const [draftRead, setDraftRead] = useState(false);
@@ -270,9 +326,25 @@ export function CaptureForm() {
     setUrl(draft.url);
     setSubject(draft.subject);
     setFolderId(draft.folderId);
+    try {
+      setBrief(window.localStorage.getItem(BRIEF_KEY) ?? "");
+    } catch {
+      // Private mode. Starting from a blank brief is the old behaviour.
+    }
     setDraftRead(true);
   }, []);
   useDraft({ text, url, subject, folderId }, draftRead);
+  useEffect(() => {
+    // Same guard as the draft: writing before the stored brief has been read
+    // would overwrite it with the empty string the server rendered.
+    if (!draftRead) return;
+    try {
+      if (brief.trim()) window.localStorage.setItem(BRIEF_KEY, brief);
+      else window.localStorage.removeItem(BRIEF_KEY);
+    } catch {
+      // Private mode, or a full quota. The brief still applies to this capture.
+    }
+  }, [draftRead, brief]);
   // Three stages: the form, the proposal being edited, and what was filed.
   const [proposal, setProposal] = useState<CaptureProposal | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -297,7 +369,8 @@ export function CaptureForm() {
   });
 
   const send = useMutation({
-    mutationFn: () => captureNotes({ file, text, url, subject, folderId }),
+    mutationFn: () =>
+      captureNotes({ file, text, url, subject, folderId, instructions: brief }),
     onSuccess: (proposed) => {
       setResult(null);
       setProposal(proposed);
@@ -464,6 +537,72 @@ export function CaptureForm() {
           if (ready && !approve.isPending) send.mutate();
         }}
       >
+        {/* First on the page because it is first in the order things happen:
+            the brief is read, and then the material is read through it. Every
+            capture carries it — a file, a link, a photo, a recording — so it is
+            not attached to any one of them. */}
+        <section className="rounded-xl border border-primary/30 bg-accent/40 px-4 py-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <Label htmlFor="capture-brief" className="text-sm font-medium">
+              Read it like this
+            </Label>
+            <span className="text-[11px] text-muted-foreground">
+              Kept for every upload, not just this one
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Your instructions, read before the material. Say how broad the concepts
+            should be, how long, in what voice, what to leave out — it overrides the
+            defaults.
+          </p>
+          <Textarea
+            id="capture-brief"
+            rows={3}
+            className="mt-2.5 bg-card/70"
+            placeholder="e.g. Keep the concepts broad and name them the way a textbook chapter would. Two sentences each, no more. Skip anything that is not examinable."
+            value={brief}
+            disabled={send.isPending}
+            onChange={(event) => setBrief(event.target.value)}
+          />
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {READY_MADE.map((ready_made) => {
+              const on = brief
+                .split("\n")
+                .some((line) => line.trim() === ready_made.line);
+              return (
+                <button
+                  key={ready_made.label}
+                  type="button"
+                  // Pressed rather than selected: these put a sentence in the box
+                  // and take it out again, and the box is what actually counts.
+                  aria-pressed={on}
+                  title={ready_made.line}
+                  disabled={send.isPending}
+                  onClick={() => setBrief((current) => toggleLine(current, ready_made.line))}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                    on
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card/60 text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                  )}
+                >
+                  {ready_made.label}
+                </button>
+              );
+            })}
+            {brief.trim() && (
+              <button
+                type="button"
+                disabled={send.isPending}
+                onClick={() => setBrief("")}
+                className="rounded-full px-2.5 py-1 text-xs text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+              >
+                Clear it
+              </button>
+            )}
+          </div>
+        </section>
+
         <Section title="From a file">
           <div
             {...getRootProps()}
