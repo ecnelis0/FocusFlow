@@ -33,6 +33,9 @@ def tidy_name(value: str) -> str:
 
 class FolderCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
+    # The unit's standing brief, settable as it is made: the moment you create
+    # "Unit 3" is the moment you know what kind of material is going into it.
+    instructions: str | None = Field(default=None, max_length=2000)
 
     @field_validator("name")
     @classmethod
@@ -42,6 +45,7 @@ class FolderCreate(BaseModel):
 
 class FolderUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=80)
+    instructions: str | None = Field(default=None, max_length=2000)
     # Moving a folder to another subject carries everything in it, which is why
     # `subject` is not separately settable on the rows themselves.
     subject_id: str | None = None
@@ -61,6 +65,11 @@ class FolderRead(BaseModel):
     name: str
     position: int
     created_at: datetime
+    # How anything filed into this unit should be read.
+    instructions: str | None = None
+    # What reading every source in it together produced, and when.
+    digest: dict | None = None
+    digest_written_at: datetime | None = None
     # What is inside, so a folder card can say so without a request per folder.
     concept_count: int = 0
     question_count: int = 0

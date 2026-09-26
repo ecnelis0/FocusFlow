@@ -580,9 +580,13 @@ async def capture(
         media_type=sniffed.media_type,
         data=data if sniffed.kind in ("image", "pdf") else None,
         subject_hint=hint or None,
-        # Capped rather than refused: a brief this long is a pasted essay, and
-        # truncating it still reads and files, where a 422 loses the upload.
-        instructions=(instructions or "").strip()[:2000] or None,
+        # Two briefs, in one block: the unit's and the student's. A folder is a
+        # working set — "these are lecture notes, keep the lecturer's framing" —
+        # and anything filed into it should be read that way without the student
+        # retyping it per upload. The unit's goes first because it is the
+        # standing rule; the typed one is about this particular upload and so
+        # gets the last word.
+        instructions=_brief(folder, instructions),
         existing=[ExistingConcept(id=c.id, title=c.title, subject=c.subject) for c in existing],
     )
 
@@ -667,6 +671,19 @@ async def commit(body: CaptureCommit, session: SessionDep, user_id: UserDep) -> 
         session, user_id, body.questions, body.source, folder=folder, material=material
     )
     return CaptureResult(changes=changes, questions=questions, material_id=material.id)
+
+
+def _brief(folder, typed: str | None) -> str | None:
+    """The unit's standing brief and the one typed for this upload, joined."""
+    unit = (folder.instructions or "").strip() if folder is not None else ""
+    mine = (typed or "").strip()
+    if unit and mine:
+        joined = (
+            f"For everything filed into {folder.name}:\n{unit}"
+            f"\n\nFor this upload:\n{mine}"
+        )
+        return joined[:4000]
+    return (unit or mine)[:4000] or None
 
 
 def _material_subject(body: CaptureCommit) -> str | None:

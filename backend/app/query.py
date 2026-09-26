@@ -17,6 +17,8 @@ from sqlalchemy.orm import selectinload
 
 from .models import (
     Concept,
+    Folder,
+    Material,
     Mistake,
     mistake_options,
 )
@@ -364,6 +366,71 @@ async def bank_context(session: AsyncSession, user_id: str, limit: int = 300) ->
             lines.append(f"    student's note: {m.student_note[:160]}")
     if not mistakes:
         lines.append("- (none yet)")
+
+    units = await units_context(session, user_id)
+    if units:
+        lines += ["", units]
+    return "\n".join(lines)
+
+
+async def units_context(session: AsyncSession, user_id: str) -> str:
+    """The units, their sources, and what reading those sources together found.
+
+    "Give me everything for this unit" is one of the two or three questions a
+    student most wants to ask, and the bank listing alone cannot answer it: it
+    knows concepts and questions, and a unit is a set of *sources*. This section
+    is what makes that question answerable — which materials make up each unit,
+    the synthesis written across them, and what is filed under it.
+    """
+    folders = list(
+        await session.scalars(
+            select(Folder)
+            .where(Folder.user_id == user_id)
+            .options(selectinload(Folder.subject))
+            .order_by(Folder.position)
+        )
+    )
+    if not folders:
+        return ""
+
+    materials = list(
+        await session.scalars(
+            select(Material).where(Material.user_id == user_id, Material.folder_id.is_not(None))
+        )
+    )
+    concepts = list(
+        await session.scalars(
+            select(Concept).where(Concept.user_id == user_id, Concept.folder_id.is_not(None))
+        )
+    )
+
+    lines = ["UNITS (a unit is a folder: several sources filed together):"]
+    for folder in folders:
+        mine = [m for m in materials if m.folder_id == folder.id]
+        theirs = [c for c in concepts if c.folder_id == folder.id]
+        lines.append(
+            f"- {folder.name} [{folder.subject.name}] — {len(mine)} source(s), "
+            f"{len(theirs)} concept(s)"
+        )
+        if folder.instructions:
+            lines.append(f"    the student's brief for it: {folder.instructions[:300]}")
+        for material in mine:
+            lines.append(f"    source: {material.title} ({material.kind})")
+        digest = folder.digest or {}
+        if digest.get("overview"):
+            lines.append(f"    read together: {digest['overview'][:400]}")
+        for agreement in (digest.get("agreements") or [])[:6]:
+            says = ", ".join(agreement.get("sources") or [])
+            lines.append(f"    agreed by [{says}]: {agreement.get('claim', '')[:200]}")
+        for contribution in (digest.get("contributions") or [])[:6]:
+            lines.append(
+                f"    only in {contribution.get('source', '?')}: "
+                f"{contribution.get('adds', '')[:200]}"
+            )
+        for conflict in (digest.get("conflicts") or [])[:4]:
+            lines.append(f"    they disagree: {conflict[:200]}")
+        for gap in (digest.get("gaps") or [])[:4]:
+            lines.append(f"    not covered by any source: {gap[:200]}")
     return "\n".join(lines)
 
 

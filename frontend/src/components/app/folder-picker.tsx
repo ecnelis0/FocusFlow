@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useSubjectTree } from "@/components/app/use-subjects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { api, keys } from "@/lib/api";
 
@@ -41,19 +42,31 @@ export function FolderPicker({
   const [making, setMaking] = useState(false);
   const [subjectName, setSubjectName] = useState("");
   const [folderName, setFolderName] = useState("");
+  // The unit's standing brief, set as it is made. A folder is a working set —
+  // several sources read the same way — and the moment you name "Unit 3" is the
+  // moment you know what kind of material is going into it.
+  const [brief, setBrief] = useState("");
 
   const all = subjects ?? [];
   const withFolders = all.filter((subject) => subject.folders.length > 0);
 
   const create = useMutation({
-    mutationFn: async ({ subject, folder }: { subject: string; folder: string }) => {
+    mutationFn: async ({
+      subject,
+      folder,
+      instructions,
+    }: {
+      subject: string;
+      folder: string;
+      instructions: string;
+    }) => {
       // A folder needs a subject to live in, and naming one that does not exist yet
       // is the common case on a first capture — so make it rather than refusing.
       const existing = all.find(
         (candidate) => candidate.name.toLowerCase() === subject.toLowerCase(),
       );
       const owner = existing ?? (await api.createSubject(subject));
-      const updated = await api.createFolder(owner.id, folder);
+      const updated = await api.createFolder(owner.id, folder, instructions);
       const added = updated.folders.find(
         (candidate) => candidate.name.toLowerCase() === folder.toLowerCase(),
       );
@@ -75,7 +88,7 @@ export function FolderPicker({
     event.preventDefault();
     const subject = subjectName.trim();
     const folder = folderName.trim();
-    if (subject && folder) create.mutate({ subject, folder });
+    if (subject && folder) create.mutate({ subject, folder, instructions: brief });
   };
 
   return (
@@ -153,6 +166,23 @@ export function FolderPicker({
                 onKeyDown={(event) => event.key === "Enter" && submit(event)}
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor={`${id}-brief`}>How to read everything in this folder</Label>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Optional, and kept. Every source you file here is read this way — a video, a
+              PDF and your notes all get the same brief.
+            </p>
+            <Textarea
+              id={`${id}-brief`}
+              rows={2}
+              className="mt-1 bg-card/70"
+              placeholder="e.g. These are lecture notes for a DBQ unit. Keep the causal chain, name every date, and skip the anecdotes."
+              value={brief}
+              disabled={create.isPending}
+              onChange={(event) => setBrief(event.target.value)}
+            />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button

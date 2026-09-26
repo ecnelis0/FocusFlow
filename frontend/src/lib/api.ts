@@ -208,19 +208,27 @@ export const api = {
   deleteSubject: (id: string) => request<void>(`/subjects/${id}`, { method: "DELETE" }),
 
   /** Returns the whole subject, so the strip redraws from the one response. */
-  createFolder: (subjectId: string, name: string) =>
+  /** `instructions` is the unit's standing brief: how anything filed into it
+   *  should be read. Set as the folder is made, because the moment you create
+   *  "Unit 3" is the moment you know what is going into it. */
+  createFolder: (subjectId: string, name: string, instructions?: string) =>
     request<Subject>(`/subjects/${subjectId}/folders`, {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, instructions: instructions?.trim() || null }),
     }),
 
   /** Moving a folder to another subject carries everything inside it. */
   updateFolder: (
     id: string,
-    edit: { name?: string; subject_id?: string; position?: number },
+    edit: { name?: string; subject_id?: string; position?: number; instructions?: string },
   ) => request<Folder>(`/folders/${id}`, { method: "PATCH", body: JSON.stringify(edit) }),
 
   deleteFolder: (id: string) => request<void>(`/folders/${id}`, { method: "DELETE" }),
+
+  /** Read every source in one unit together. Needs at least two of them: with
+   *  one source there is nothing *between* sources to find. */
+  writeFolderDigest: (id: string, force = false) =>
+    request<Folder>(`/folders/${id}/digest?force=${force}`, { method: "POST" }),
 
   /** Take a label off every question carrying it. The questions are untouched. */
   deleteTag: (tag: string) =>

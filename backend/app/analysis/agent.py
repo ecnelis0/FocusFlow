@@ -30,6 +30,7 @@ from .claude import INTERPRET_PROMPT, SUMMARISE_PROMPT, summarise_prompt
 from .extract import _TEXT_LABELS, EXTRACT_PROMPT, CaptureExtraction, CaptureInput, _tail
 from .notes import NOTES_PROMPT, NoteDocument, NoteInput
 from .scan import SCAN_PROMPT, ScanInput, ScannedQuestion
+from .unit import UNIT_PROMPT, UnitDigest, UnitInput
 
 # Where a PDF or image lands before the agent reads it. Extension matters: the CLI
 # decides how to read a file from its suffix.
@@ -295,4 +296,21 @@ class AgentCardWriter:
             system=CARD_PROMPT,
             model=self._model,
             schema=ConceptCard,
+        )
+
+
+class AgentUnitWriter:
+    """One unit's sources read together, through the Claude Agent SDK."""
+
+    name = "agent"
+
+    def __init__(self, model: str) -> None:
+        self._model = model
+
+    async def write(self, unit: UnitInput) -> UnitDigest:
+        return await _run(
+            prompt=unit.render(),
+            system=UNIT_PROMPT,
+            model=self._model,
+            schema=UnitDigest,
         )

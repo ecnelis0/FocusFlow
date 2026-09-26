@@ -111,6 +111,16 @@ class Folder(Base):
 
     name: Mapped[str] = mapped_column(String(80))
     position: Mapped[int] = mapped_column(Integer, default=0)
+    # The standing brief for this unit: how anything filed into it should be
+    # read. Every capture into the folder carries it, so a unit can have a
+    # different house style from the rest of the bank - "these are lecture
+    # notes, keep the lecturer's framing", "exam-focused, skip the anecdotes".
+    instructions: Mapped[str | None] = mapped_column(Text, default=None)
+    # What reading every source in the unit together produced: where they agree,
+    # what each one adds alone, and what none of them covers. JSON because it is
+    # written and read as one object and every part of it is optional.
+    digest: Mapped[dict | None] = mapped_column(JSON, default=None)
+    digest_written_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), default=None)
 
     subject: Mapped[Subject] = relationship(back_populates="folders")
 

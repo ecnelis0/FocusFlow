@@ -15,6 +15,8 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
+from ..analysis.base import AnalysisFailed
+from ..analysis.unit import UnitInput, get_unit_writer
 from ..deps import SessionDep, UserDep
 from ..filing import (
     empty_folders,
@@ -23,7 +25,7 @@ from ..filing import (
     rename_subject,
     unfile_subject,
 )
-from ..models import Concept, Folder, Mistake, Subject, new_id, utcnow
+from ..models import Concept, Folder, Material, Mistake, Subject, new_id, utcnow
 from ..schemas import (
     FolderCreate,
     FolderRead,
@@ -87,15 +89,7 @@ async def _counts(session, user_id: str) -> Counts:
 
 def _read(subject: Subject, counts: Counts) -> SubjectRead:
     folders = [
-        FolderRead(
-            id=folder.id,
-            subject_id=folder.subject_id,
-            name=folder.name,
-            position=folder.position,
-            created_at=folder.created_at,
-            concept_count=counts.folder_concepts.get(folder.id, 0),
-            question_count=counts.folder_questions.get(folder.id, 0),
-        )
+        _folder_read(folder, counts)
         for folder in subject.folders
     ]
     key = subject.name.lower()
@@ -222,6 +216,27 @@ async def delete_subject(subject_id: str, session: SessionDep, user_id: UserDep)
     await session.commit()
 
 
+def _folder_read(folder: Folder, counts) -> FolderRead:
+    """The one place a folder becomes a response.
+
+    It was built by hand in two places, and a field added to the schema but not
+    to both of them goes out as null with nothing to say so — which is exactly
+    how `motif` and `card` were silently dropped from concepts.
+    """
+    return FolderRead(
+        id=folder.id,
+        subject_id=folder.subject_id,
+        name=folder.name,
+        position=folder.position,
+        created_at=folder.created_at,
+        instructions=folder.instructions,
+        digest=folder.digest,
+        digest_written_at=folder.digest_written_at,
+        concept_count=counts.folder_concepts.get(folder.id, 0),
+        question_count=counts.folder_questions.get(folder.id, 0),
+    )
+
+
 @router.post("/{subject_id}/folders", response_model=SubjectRead, status_code=201)
 async def create_folder(
     subject_id: str, body: FolderCreate, session: SessionDep, user_id: UserDep
@@ -242,6 +257,7 @@ async def create_folder(
             created_at=utcnow(),
             name=body.name,
             position=last + 1,
+            instructions=(body.instructions or "").strip() or None,
         )
     )
     await session.commit()
@@ -277,6 +293,11 @@ async def update_folder(
 
     folder.name = name
     folder.subject_id = target.id
+    if body.instructions is not None:
+        # Empty clears it: a brief you have deleted the text of is no brief, and
+        # keeping the old one because the box came back blank is the kind of
+        # surprise that makes people stop trusting a setting.
+        folder.instructions = body.instructions.strip() or None
     if body.position is not None:
         folder.position = body.position
 
@@ -294,15 +315,7 @@ async def update_folder(
     await session.commit()
     folder = await _load_folder(session, user_id, folder_id)
     counts = await _counts(session, user_id)
-    return FolderRead(
-        id=folder.id,
-        subject_id=folder.subject_id,
-        name=folder.name,
-        position=folder.position,
-        created_at=folder.created_at,
-        concept_count=counts.folder_concepts.get(folder.id, 0),
-        question_count=counts.folder_questions.get(folder.id, 0),
-    )
+    return _folder_read(folder, counts)
 
 
 @folders_router.delete("/{folder_id}", status_code=204)
@@ -312,3 +325,92 @@ async def delete_folder(folder_id: str, session: SessionDep, user_id: UserDep) -
     await empty_folders(session, user_id, [folder.id])
     await session.delete(folder)
     await session.commit()
+
+
+@folders_router.post("/{folder_id}/digest", response_model=FolderRead)
+async def write_digest(
+    folder_id: str,
+    session: SessionDep,
+    user_id: UserDep,
+    force: bool = False,
+) -> FolderRead:
+    """Read every source in this unit together.
+
+    A unit is several materials — a lecture, a chapter, a video, a page of
+    notes. Filed separately they each produce their own concepts, and nobody
+    tells the student that three of them are saying the same thing in different
+    words, or that only one of them mentioned the treaty. This is the pass that
+    notices, and what it writes down is about the *sources*: where they agree,
+    what each one adds alone, where they disagree, and what none of them covers.
+
+    Kept once written, like the notes and the concept cards: a synthesis that
+    comes back different every time is one you cannot revise from. `force=true`
+    writes it again, from a button that says so.
+
+    Built from the concepts each material produced rather than from the original
+    text — the text is not kept, and the concepts are already the distilled
+    version of it.
+    """
+    folder = await _load_folder(session, user_id, folder_id)
+
+    if folder.digest is not None and not force:
+        raise HTTPException(
+            status_code=409,
+            detail="This unit already has a synthesis. Send force=true to write it again.",
+        )
+
+    materials = (
+        await session.scalars(
+            select(Material)
+            .where(Material.user_id == user_id, Material.folder_id == folder_id)
+            .options(selectinload(Material.concepts))
+            .order_by(Material.created_at)
+        )
+    ).all()
+
+    if len(materials) < 2:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "A unit needs at least two sources before there is anything to read "
+                "between them. Add another material to this folder first."
+            ),
+        )
+
+    sources = []
+    for material in materials:
+        lines = [f"### {material.title} ({material.kind})"]
+        if material.summary:
+            lines.append(f"Summary: {material.summary}")
+        if material.concepts:
+            lines.append(
+                "Concepts filed from it:\n"
+                + "\n".join(
+                    f"- {c.title}: {(c.body or '').strip()[:400]}" for c in material.concepts
+                )
+            )
+        else:
+            lines.append("(No concepts were filed from this one.)")
+        sources.append("\n".join(lines))
+
+    writer = get_unit_writer()
+    try:
+        digest = await writer.write(
+            UnitInput(
+                unit=folder.name,
+                subject=folder.subject.name,
+                instructions=folder.instructions,
+                sources=sources,
+            )
+        )
+    except AnalysisFailed as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - one bad synthesis must not 500 the page
+        raise HTTPException(status_code=503, detail=f"{type(exc).__name__}: {exc}") from exc
+
+    folder.digest = digest.model_dump()
+    folder.digest_written_at = utcnow()
+    await session.commit()
+
+    folder = await _load_folder(session, user_id, folder_id)
+    return _folder_read(folder, await _counts(session, user_id))

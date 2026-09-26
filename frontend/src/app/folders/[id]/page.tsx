@@ -9,6 +9,7 @@ import { MistakeCard } from "@/components/app/mistake-card";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
 import { Section } from "@/components/app/section";
+import { UnitDigest } from "@/components/app/unit-digest";
 import { Unreachable } from "@/components/app/unreachable";
 import { useSubjectTree } from "@/components/app/use-subjects";
 import { buttonVariants } from "@/components/ui/button";
@@ -150,6 +151,10 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
           </>
         }
       />
+
+      {/* A unit is a working set, not a drawer: the brief that everything filed
+          here is read with, and what its sources add up to when read together. */}
+      <UnitDigest folder={folder} />
 
       <Section
         title="Concepts"

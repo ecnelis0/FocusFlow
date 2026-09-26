@@ -15,8 +15,24 @@ export interface Folder {
   name: string;
   position: number;
   created_at: string;
+  /** How anything filed into this unit should be read. Joined to whatever the
+   *  student types on the capture itself. */
+  instructions: string | null;
+  /** What reading every source in the unit together produced. */
+  digest: UnitDigest | null;
+  digest_written_at: string | null;
   concept_count: number;
   question_count: number;
+}
+
+/** What only exists between the sources in a unit. Mirrors
+ *  `backend/app/analysis/unit.py`; change them together. */
+export interface UnitDigest {
+  overview: string;
+  agreements: { claim: string; sources: string[]; note: string | null }[];
+  contributions: { source: string; adds: string }[];
+  conflicts: string[];
+  gaps: string[];
 }
 
 /** A course — "APUSH", "SAT", "Calculus". One tab on the bank.
